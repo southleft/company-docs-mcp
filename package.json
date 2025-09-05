@@ -1,0 +1,53 @@
+{
+	"name": "company-docs-mcp",
+	"version": "1.0.0",
+	"description": "Self-hosted MCP server for organization documentation",
+	"private": false,
+	"type": "module",
+	"scripts": {
+		"setup": "tsx scripts/setup.ts",
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev",
+		"format": "biome format --write",
+		"lint:fix": "biome lint --fix",
+		"start": "wrangler dev",
+		"cf-typegen": "wrangler types",
+		"type-check": "tsc --noEmit",
+		"ingest": "tsx scripts/ingest/ingest.ts",
+		"ingest:csv": "tsx scripts/ingest/ingest-csv.ts --",
+		"ingest:pdf": "tsx scripts/ingest/ingest.ts pdf",
+		"ingest:url": "tsx scripts/ingest/ingest.ts url",
+		"ingest:markdown": "tsx scripts/ingest/ingest-markdown.ts --",
+		"ingest:github": "tsx scripts/ingest/ingest-github.ts --",
+		"ingest:web": "tsx scripts/ingest/crawl-website.ts --",
+		"ingest:supabase": "tsx scripts/ingest-supabase.ts",
+		"slack:setup": "tsx scripts/slack-setup.ts",
+		"slack:start": "tsx src/slack-bot/index.ts",
+		"slack:deploy": "tsx scripts/deploy-slack.ts",
+		"test:local": "tsx scripts/test-local.ts",
+		"db:setup": "tsx scripts/setup-database.ts",
+		"db:migrate": "tsx scripts/migrate-database.ts"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.0.7",
+		"@supabase/supabase-js": "^2.56.1",
+		"@types/cheerio": "^0.22.35",
+		"agents": "^0.0.95",
+		"cheerio": "^1.1.0",
+		"dotenv": "^17.2.1",
+		"openai": "^4.67.3",
+		"pdf-parse": "^1.1.1",
+		"uuid": "^11.1.0",
+		"zod": "^3.23.8"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.0.4",
+		"@types/node": "^22.10.2",
+		"@typescript-eslint/eslint-plugin": "^8.18.2",
+		"@typescript-eslint/parser": "^8.18.2",
+		"eslint": "^9.18.0",
+		"tsx": "^4.19.2",
+		"typescript": "^5.7.2",
+		"wrangler": "^4.20.5"
+	}
+}
