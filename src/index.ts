@@ -1293,9 +1293,18 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 				return new Response(JSON.stringify({ error: 'Invalid query' }), { status: 400, headers: { "Content-Type": "application/json" }});
 			}
 			
+			// Debug: Log environment availability
+			console.log('[Search] Env check:', {
+				hasSupabaseUrl: !!env?.SUPABASE_URL,
+				hasSupabaseKey: !!env?.SUPABASE_ANON_KEY,
+				vectorEnabled: env?.VECTOR_SEARCH_ENABLED,
+				vectorMode: env?.VECTOR_SEARCH_MODE
+			});
+			
 			// Try Supabase first if available, otherwise use local chunks
 			let mapped;
 			if (env?.SUPABASE_URL && env?.SUPABASE_ANON_KEY) {
+				console.log('[Search] Using Supabase search');
 				// Use searchEntries which checks Supabase
 				const entries = await searchEntries({ query, limit }, env);
 				mapped = entries.map(e => ({
@@ -1311,6 +1320,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 					}
 				}));
 			} else {
+				console.log('[Search] Falling back to local chunks');
 				// Fallback to local chunks
 				const results = searchChunks(query, limit, { enableDiversity: true, maxPerSource: 2, preferUrls: true });
 				mapped = results.map(r => {
