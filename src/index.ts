@@ -118,15 +118,15 @@ This is a rare occurrence on the paid tier - please retry your request.`;
 }
 
 // AI System Prompt
-const AI_SYSTEM_PROMPT = `You are a design systems expert assistant.
+const AI_SYSTEM_PROMPT = `You are a knowledge assistant with access to ${process.env.ORGANIZATION_NAME || 'organization'} documentation.
 
 When you receive a question, search the knowledge base using the available tools and provide a comprehensive, detailed answer. Aim to be thorough and informative - provide rich context, examples, best practices, and implementation details when relevant. Users are looking for in-depth expertise, not brief summaries.
 
 Structure your response with these two sections:
 
 1. "📚 From the Knowledge Base" section:
-   - PUT HERE: Everything from search_chunks and search_design_knowledge tools
-   - PUT HERE: All content with citations like [Design System Glossary]
+   - PUT HERE: Everything from search_chunks and search_documentation tools
+   - PUT HERE: All content with citations
    - PUT HERE: All content with source links
    - NEVER PUT HERE: Your general AI knowledge
 
@@ -144,20 +144,19 @@ IF YOU PUT MCP RESULTS IN GENERAL KNOWLEDGE, THE SYSTEM BREAKS.
 • General Knowledge section = Your AI training WITHOUT citations
 • NEVER put citations in General Knowledge
 • NEVER put uncited content in Knowledge Base
-• If you're citing [Design System Glossary] or any source → Knowledge Base ONLY
 
 CRITICAL SEARCH REQUIREMENT:
 ⚠️ You MUST search the knowledge base before claiming any content doesn't exist.
 ⚠️ NEVER say "there is no content about X" without first searching for:
-   - The exact term (e.g., "slots")
-   - Variations (e.g., "slot", "slot-based")
-   - Related concepts (e.g., "content projection", "placeholder")
+   - The exact term
+   - Variations and synonyms
+   - Related concepts
 
 RESPONSE STRUCTURE (REQUIRED):
 Always structure your response with these two sections in this exact order:
 
 ## 📚 From the Knowledge Base
-[CRITICAL: This section MUST contain ONLY the results from your MCP tool searches (search_chunks and search_design_knowledge). Include ALL relevant information found from your searches with proper citations and source links. This is where the curated design systems content goes. If searches return results, provide COMPREHENSIVE summaries with their sources. This section should be RICH and DETAILED - more so than general knowledge because it contains specialized, curated content.
+[CRITICAL: This section MUST contain ONLY the results from your MCP tool searches. Include ALL relevant information found from your searches with proper citations and source links. If searches return results, provide COMPREHENSIVE summaries with their sources. This section should be RICH and DETAILED - more so than general knowledge because it contains specialized, curated content.
 
 ⚠️ NEVER PUT GENERAL AI KNOWLEDGE HERE - ONLY MCP SEARCH RESULTS
 ✅ This section should be the PRIMARY source of information, with more detail than General Knowledge]
@@ -170,22 +169,21 @@ Always structure your response with these two sections in this exact order:
 
 SEARCH STRATEGY:
 1. ALWAYS search using search_chunks for detailed information
-2. ALSO use search_design_knowledge for broader context
+2. ALSO use search_documentation for broader context
 3. If the first search seems incomplete, try variations of the query
-4. The knowledge base includes extensive glossaries with definitions - check these
+4. The knowledge base may include glossaries and definitions - check these
 
 LINK FORMATTING RULES:
 • ALWAYS use proper Markdown link format: [link text](URL)
 • NEVER show raw URLs alongside linked text
-• Example: ✅ [Design System Glossary](https://example.com/glossary)
-• Wrong: ❌ https://example.com/glossary [Design System Glossary]
-• Wrong: ❌ Design System Glossary (https://example.com/glossary)
+• Example: ✅ [Documentation Title](https://example.com/docs)
+• Wrong: ❌ https://example.com/docs [Documentation Title]
+• Wrong: ❌ Documentation Title (https://example.com/docs)
 
 SECTION ASSIGNMENT RULES (ABSOLUTELY CRITICAL - NEVER VIOLATE):
-• MCP tool results (search_chunks, search_design_knowledge) → "📚 From the Knowledge Base" section ONLY
+• MCP tool results → "📚 From the Knowledge Base" section ONLY
 • Your training knowledge → "🧠 From General Knowledge" section ONLY
-• Citations like [Design System Glossary], [Laying the Foundations] → Knowledge Base section ONLY
-• Source links and references → Knowledge Base section ONLY
+• Citations and source links → Knowledge Base section ONLY
 • Generic best practices without citations → General Knowledge section ONLY
 • NEVER mix MCP results with training knowledge in the same section
 • If you cite a source, it MUST be in the Knowledge Base section
@@ -197,21 +195,21 @@ FORMATTING GUIDELINES:
 • For step-by-step instructions, numbered lists work well
 • Cite sources inline naturally: [Source Name](url)
 
-IMPORTANT: The knowledge base contains multiple glossaries with extensive definitions of design system terms. Always search thoroughly before claiming information doesn't exist.`;
+IMPORTANT: Always search thoroughly using multiple query variations before claiming information doesn't exist in the knowledge base.`;
 
 // Available MCP tools for the AI
 const MCP_TOOLS = [
 	{
 		type: "function",
 		function: {
-			name: "search_design_knowledge",
-			description: "Search the design systems knowledge base for general information",
+			name: "search_documentation",
+			description: "Search the organization's documentation knowledge base",
 			parameters: {
 				type: "object",
 				properties: {
 					query: {
 						type: "string",
-						description: "Search query for design system knowledge"
+						description: "Search query for documentation"
 					},
 					category: {
 						type: "string",
@@ -683,7 +681,7 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 
 // Create MCP server instance
 const server = new McpServer({
-	name: "Design Systems Knowledge Base",
+	name: `${process.env.ORGANIZATION_NAME || 'Organization'} Documentation`,
 	version: "1.0.0",
 });
 
@@ -692,7 +690,7 @@ server.tool(
 	"search_design_knowledge",
 	{
 		query: z.string().describe("Search query for design system knowledge"),
-		category: z.enum(["components", "tokens", "patterns", "workflows", "guidelines", "general"])
+		category: z.string()
 			.optional()
 			.describe("Filter by category"),
 		tags: z.array(z.string()).optional().describe("Filter by tags"),
@@ -710,7 +708,7 @@ server.tool(
 			return {
 				content: [{
 					type: "text",
-					text: "No design system knowledge found matching your search criteria."
+					text: "No documentation found matching your search criteria."
 				}],
 			};
 		}
@@ -799,7 +797,7 @@ ${formattedChunks}`
 server.tool(
 	"browse_by_category",
 	{
-		category: z.enum(["components", "tokens", "patterns", "workflows", "guidelines", "general"])
+		category: z.string()
 			.describe("Category to browse"),
 	},
 	async ({ category }) => {
@@ -917,7 +915,7 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 						prompts: {}
 					},
 					serverInfo: {
-						name: "Design Systems Knowledge Base",
+						name: `${process.env.ORGANIZATION_NAME || 'Organization'} Documentation`,
 						version: "1.0.0"
 					}
 				}
@@ -1055,7 +1053,7 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 						result = {
 							content: [{
 								type: "text",
-								text: "No design system knowledge found matching your search criteria."
+								text: "No documentation found matching your search criteria."
 							}],
 						};
 					} else {
@@ -1264,31 +1262,31 @@ export default {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Design Systems Assistant - AI-Powered Design Systems Knowledge</title>
-    <meta name="description" content="MCP (Model Context Protocol) server with specialized design systems knowledge. Search through hundreds of curated resources to get expert answers about components, tokens, patterns, and best practices.">
+    <title>${process.env.ORGANIZATION_NAME || 'Organization'} Documentation Assistant</title>
+    <meta name="description" content="MCP (Model Context Protocol) server with ${process.env.ORGANIZATION_NAME || 'organization'} documentation. Search through curated resources to get expert answers.">
 
     <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1080 482'%3E%3Cstyle%3E.st1%7Bfill:%23333333%7D@media (prefers-color-scheme:dark)%7B.st1%7Bfill:%23ffffff%7D%7D%3C/style%3E%3Cpath class='st1' d='M439.7 462.3c-12 0-22.1 4.8-30.1 16.8l-32.7-192.9 2.6-1.4C422.9 351 490.5 392 549.4 392c42.9 0 71-17.4 71-46.9 0-30.1-39.5-44.9-102.3-66.3-59.6-21.4-133.2-54.3-133.2-140.8 0-77.7 71-138 170-138 54.9 0 81 15.4 99.7 15.4 10.8 0 18.1-3.4 25.4-12.8l21.4 170.7-2.6 1.4c-32.1-54.3-86.4-85.7-142.5-85.7-44.1 0-73.6 20.2-73.6 46.9 0 30.2 38.9 42.9 79.6 58.9 70.2 24.2 158 57.5 157.2 148.8 0 80.3-70.2 138.6-164 138.6C497.9 482.2 460.4 462.3 439.7 462.3z'/%3E%3Cpath class='st1' d='M831.5 2.5l126.3 236.7L830.4 477.9h124.2L1080 239.2 956.8 2.5H831.5z'/%3E%3Cpath class='st1' d='M125.4 2.5L0 241.2l123.2 236.7h125.2L122.2 241.2 249.6 2.5H125.4z'/%3E%3C/svg%3E">
 
     <!-- Open Graph / Social Media Meta Tags -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Design Systems Assistant - AI-Powered Knowledge Base">
-    <meta property="og:description" content="MCP server with specialized design systems knowledge. Search through hundreds of curated resources to get expert answers about components, tokens, patterns, and best practices.">
-    <meta property="og:url" content="https://design-systems-mcp.southleft.com">
-    <meta property="og:image" content="https://design-systems-mcp.southleft.com/og-image.png">
+    <meta property="og:title" content="${process.env.ORGANIZATION_NAME || 'Organization'} Documentation Assistant">
+    <meta property="og:description" content="MCP server with ${process.env.ORGANIZATION_NAME || 'organization'} documentation and curated resources.">
+    <meta property="og:url" content="${process.env.ORGANIZATION_DOMAIN || 'example.com'}">
+    <meta property="og:image" content="${process.env.ORGANIZATION_DOMAIN || 'example.com'}/og-image.png">
     <meta property="og:image:width" content="900">
     <meta property="og:image:height" content="630">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Design Systems Assistant">
-    <meta name="twitter:description" content="MCP server with specialized design systems knowledge and curated resources">
-    <meta name="twitter:image" content="https://design-systems-mcp.southleft.com/og-image.png">
+    <meta name="twitter:title" content="${process.env.ORGANIZATION_NAME || 'Organization'} Documentation">
+    <meta name="twitter:description" content="MCP server with ${process.env.ORGANIZATION_NAME || 'organization'} documentation and curated resources">
+    <meta name="twitter:image" content="${process.env.ORGANIZATION_DOMAIN || 'example.com'}/og-image.png">
 
     <!-- Additional Meta -->
     <meta name="theme-color" content="#339af0">
     <meta name="author" content="Southleft">
-    <link rel="canonical" href="https://design-systems-mcp.southleft.com">
+    <link rel="canonical" href="${process.env.ORGANIZATION_DOMAIN || 'example.com'}">
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -1330,7 +1328,7 @@ export default {
     <div id="loader" class="loader-container">
         <div style="text-align: center;">
             <div class="loader"></div>
-            <div style="margin-top: 16px; font-size: 14px;">Loading Design Systems Chat...</div>
+            <div style="margin-top: 16px; font-size: 14px;">Loading Documentation Chat...</div>
         </div>
     </div>
     <div id="root"></div>
@@ -1549,7 +1547,7 @@ export default {
         function ChatApp() {
             const [messages, setMessages] = useState([{
                 type: 'system',
-                content: '🎯 Welcome! I\\'m your AI design systems assistant. I can search through your design systems knowledge base and provide expert answers.\\n\\n💡 Ask me anything about design systems, components, tokens, or best practices!'
+                content: `🎯 Welcome! I'm your AI documentation assistant for ${process.env.ORGANIZATION_NAME || 'the organization'}. I can search through the knowledge base and provide expert answers.\n\n💡 Ask me anything about our documentation and processes!`
             }]);
             const [inputValue, setInputValue] = useState('');
             const [isLoading, setIsLoading] = useState(false);
@@ -1877,7 +1875,7 @@ export default {
                                             >
                                                 <textarea
                                                     ref={textareaRef}
-                                                    placeholder="Ask me anything about design systems..."
+                                                    placeholder="Ask me anything about our documentation..."
                                                     value={inputValue}
                                                     onChange={(e) => handleTextareaInput(e)}
                                                     onKeyDown={handleKeyPress}
@@ -1987,12 +1985,12 @@ export default {
                                                     }}
                                                     onClick={() => {
                                                         const queries = {
-                                                            'Overview': 'What is a design system?',
-                                                            'Getting Started': 'How do I get started with design systems?',
-                                                            'Theming': 'Tell me about theming',
-                                                            'Tokens': 'What are design tokens?',
-
-                                                            'Adoption': 'How do I get stakeholder buy-in for design systems?'
+                                                            'Overview': 'What documentation is available?',
+                                                            'Getting Started': 'How do I get started?',
+                                                            'Search': 'How can I search the documentation?',
+                                                            'API': 'Where is the API documentation?',
+                                                            'Support': 'How do I get support?',
+                                                            'FAQ': 'Where can I find frequently asked questions?'
                                                         };
                                                         askQuestion(queries[item.text] || item.text);
                                                     }}
@@ -2048,7 +2046,7 @@ export default {
                                     }}>
                                         <textarea
                                             ref={textareaRef2}
-                                            placeholder="Ask me anything about design systems..."
+                                            placeholder="Ask me anything about our documentation..."
                                             value={inputValue}
                                             onChange={(e) => setInputValue(e.target.value)}
                                             onKeyDown={handleKeyPress}
@@ -2134,7 +2132,7 @@ export default {
                         marginTop: 'auto'
                     }}>
                         <Text size="sm" style={{ color: '#6c6f75', fontSize: '13px', marginBottom: '8px' }}>
-                            🤖 MCP Server for Design Systems • Powered by curated knowledge base
+                            🤖 MCP Server for ${process.env.ORGANIZATION_NAME || 'Documentation'} • Powered by curated knowledge base
                         </Text>
                         <Text size="sm" style={{ color: '#6c6f75', fontSize: '13px' }}>
                             Made with ❤️ by{' '}
@@ -2333,7 +2331,7 @@ export default {
 		if (url.pathname === "/health") {
 			return new Response(JSON.stringify({
 				status: "ok",
-				service: "Design Systems MCP",
+				service: `${process.env.ORGANIZATION_NAME || 'Documentation'} MCP`,
 				version: "1.0.0"
 			}), {
 				headers: {
@@ -2343,7 +2341,7 @@ export default {
 			});
 		}
 
-		return new Response("Design Systems MCP Server - Use /mcp or /ai-chat endpoints", {
+		return new Response(`${process.env.ORGANIZATION_NAME || 'Documentation'} MCP Server - Use /mcp or /ai-chat endpoints`, {
 			status: 200,
 			headers: {
 				"Content-Type": "text/plain",

@@ -1,9 +1,9 @@
 /**
- * Core types for Design Systems MCP content
+ * Core types for MCP documentation content
  */
 
 export type SourceType = 'pdf' | 'html' | 'url';
-export type Category = 'components' | 'tokens' | 'patterns' | 'workflows' | 'guidelines' | 'general' | 'glossary';
+export type Category = string; // Organizations can define their own categories
 export type Confidence = 'high' | 'medium' | 'low';
 
 export interface ContentSource {
@@ -32,7 +32,7 @@ export interface ContentMetadata {
   version?: string;
   last_updated: string;
   author?: string;
-  system?: string; // e.g., "Material Design", "Carbon", etc.
+  department?: string; // e.g., "Engineering", "Marketing", etc.
   [key: string]: any; // Allow for additional metadata
 }
 
