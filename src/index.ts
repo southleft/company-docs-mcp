@@ -1307,18 +1307,29 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 				console.log('[Search] Using Supabase search');
 				// Use searchEntries which checks Supabase
 				const entries = await searchEntries({ query, limit }, env);
-				mapped = entries.map(e => ({
-					title: e.title,
-					content: e.content.slice(0, 500),
-					source: e.metadata?.source || e.metadata?.source_url || e.source?.location || '',
-					relevance: 1,
-					metadata: {
-						category: e.metadata?.category,
-						tags: e.metadata?.tags,
-						system: e.metadata?.system,
-						source: e.metadata?.source || e.metadata?.source_url
+				mapped = entries.map(e => {
+					// Try to extract source URL from content frontmatter if metadata doesn't have it
+					let sourceUrl = e.metadata?.source || e.metadata?.source_url || '';
+					if (!sourceUrl && e.content) {
+						// Extract from frontmatter in content
+						const sourceMatch = e.content.match(/^source:\s*(https?:\/\/[^\n]+)/m);
+						if (sourceMatch) {
+							sourceUrl = sourceMatch[1];
+						}
 					}
-				}));
+					return {
+						title: e.title,
+						content: e.content.slice(0, 500),
+						source: sourceUrl || e.source?.location || '',
+						relevance: 1,
+						metadata: {
+							category: e.metadata?.category,
+							tags: e.metadata?.tags,
+							system: e.metadata?.system,
+							source: sourceUrl
+						}
+					};
+				});
 			} else {
 				console.log('[Search] Falling back to local chunks');
 				// Fallback to local chunks
