@@ -26,6 +26,7 @@
 		"slack:deploy": "tsx scripts/deploy-slack.ts",
 		"test:local": "tsx scripts/test-local.ts",
 		"db:setup": "tsx scripts/setup-database.ts",
+		"db:setup:sql": "tsx scripts/setup-database.ts --sql-only",
 		"db:migrate": "tsx scripts/migrate-database.ts"
 	},
 	"dependencies": {

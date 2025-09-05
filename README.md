@@ -37,22 +37,29 @@ npm run setup
 
 The setup wizard will guide you through:
 - Creating your `.env` configuration
-- Setting up your Supabase database
+- Testing your Supabase connection
 - Configuring content sources
 - (Optional) Setting up Slack integration
 
-### 2. Configure Supabase
+### 2. Configure Supabase Database
 
 1. Create a new Supabase project at [supabase.com](https://supabase.com)
 2. Go to Settings → API and copy:
    - Project URL → `SUPABASE_URL`
    - Anon public key → `SUPABASE_ANON_KEY`
    - Service role key → `SUPABASE_SERVICE_KEY`
-3. Run database setup:
+3. Set up database tables:
 
 ```bash
+# This will show you instructions and the SQL to run
 npm run db:setup
 ```
+
+**Manual Setup Alternative:**
+- Go to your Supabase Dashboard → SQL Editor
+- Create a new query
+- Copy and paste the contents of `database/schema.sql`
+- Click "Run" to create the tables
 
 ### 3. Ingest Your Documentation
 

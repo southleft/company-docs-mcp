@@ -165,27 +165,41 @@ DEBUG_MODE=false
 async function setupSupabaseDatabase(config: Config) {
   console.log('\n🗄️  Setting up Supabase database...');
   
+  // Test connection
   try {
     const supabase = createClient(config.supabaseUrl, config.supabaseServiceKey);
     
-    // Read the schema file
-    const schemaPath = path.join(process.cwd(), 'database', 'schema.sql');
-    const schema = await fs.readFile(schemaPath, 'utf-8');
+    // Test the connection with a simple query
+    const { error: testError } = await supabase.from('content_entries').select('count').limit(1);
     
-    // Execute the schema
-    const { error } = await supabase.rpc('exec_sql', { sql: schema }).single();
-    
-    if (error && !error.message.includes('already exists')) {
-      throw error;
+    if (testError && testError.code === '42P01') { // Table doesn't exist
+      console.log('\n📋 Database tables not found. Please set them up:');
+      console.log('\n──────────────────────────────────────────');
+      console.log('Option 1: Automatic Setup (Recommended)');
+      console.log('──────────────────────────────────────────');
+      console.log('Run: npm run db:setup');
+      console.log('\n──────────────────────────────────────────');
+      console.log('Option 2: Manual Setup');
+      console.log('──────────────────────────────────────────');
+      console.log('1. Go to your Supabase dashboard: ' + config.supabaseUrl);
+      console.log('2. Navigate to SQL Editor');
+      console.log('3. Create a new query');
+      console.log('4. Copy and paste the contents of database/schema.sql');
+      console.log('5. Click "Run" to execute the SQL');
+      console.log('\n✨ After setting up the database, you can start ingesting content!');
+    } else if (testError) {
+      console.error('⚠️  Could not connect to Supabase:', testError.message);
+      console.log('\nPlease verify your Supabase credentials are correct.');
+    } else {
+      console.log('✅ Supabase connection successful!');
+      console.log('✅ Database tables already exist');
     }
-    
-    console.log('✅ Database schema created');
   } catch (error) {
-    console.error('❌ Failed to setup database:', error);
-    console.log('\nPlease run the following SQL in your Supabase SQL editor:');
-    console.log('1. Go to your Supabase dashboard');
-    console.log('2. Navigate to SQL Editor');
-    console.log('3. Copy and run the contents of database/schema.sql');
+    console.error('❌ Failed to connect to Supabase:', error);
+    console.log('\nPlease verify:');
+    console.log('1. Your Supabase URL is correct');
+    console.log('2. Your API keys are valid');
+    console.log('3. Your Supabase project is active');
   }
 }
 
@@ -322,21 +336,25 @@ Create a new user.
 async function printNextSteps(config: Config) {
   console.log('\n✨ Setup Complete!\n');
   console.log('Next steps:\n');
-  console.log('1. Ingest your documentation:');
+  console.log('1. Set up your database tables:');
+  console.log('   npm run db:setup');
+  console.log('   (Follow the instructions to run the SQL in Supabase)\n');
+  
+  console.log('2. Ingest your documentation:');
   console.log('   npm run ingest:markdown -- --dir=./your-docs');
   console.log('   npm run ingest:supabase  # Generate embeddings\n');
   
-  console.log('2. Test locally:');
+  console.log('3. Test locally:');
   console.log('   npm run dev\n');
   
   if (config.deployToCloudflare) {
-    console.log('3. Deploy to Cloudflare:');
+    console.log('4. Deploy to Cloudflare:');
     console.log('   wrangler kv:namespace create CONTENT_CACHE');
     console.log('   npm run deploy\n');
   }
   
   if (config.enableSlackBot) {
-    console.log('4. Start Slack bot:');
+    console.log('5. Start Slack bot:');
     console.log('   npm run slack:start\n');
   }
   
