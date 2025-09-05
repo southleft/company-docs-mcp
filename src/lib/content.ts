@@ -2,7 +2,7 @@
  * Core types for MCP documentation content
  */
 
-export type SourceType = 'pdf' | 'html' | 'url';
+export type SourceType = 'pdf' | 'html' | 'url' | 'markdown';
 export type Category = string; // Organizations can define their own categories
 export type Confidence = 'high' | 'medium' | 'low';
 

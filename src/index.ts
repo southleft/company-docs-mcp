@@ -7,11 +7,11 @@ import {
 	getAllTags,
 	getEntryById,
 	SAMPLE_ENTRIES
-} from "./lib/content-manager.js";
-import { searchChunksEnhanced as searchChunks } from "./lib/content-manager-enhanced.js";
-import { searchWithSupabase as searchEntries } from "./lib/search-handler.js";
-import { formatSourceReference, formatInlineCitation } from "./lib/source-formatter.js";
-import { Category, ContentEntry } from "../types/content";
+} from "./lib/content-manager";
+import { searchChunksEnhanced as searchChunks } from "./lib/content-manager-enhanced";
+import { searchWithSupabase as searchEntries } from "./lib/search-handler";
+import { formatSourceReference, formatInlineCitation } from "./lib/source-formatter";
+import { Category, ContentEntry } from "./lib/content";
 
 // OpenAI integration
 import { OpenAI } from "openai";
@@ -22,7 +22,7 @@ console.log('🔄 Loading content from JSON files...');
 async function loadActualContent() {
 	try {
 		// Load content dynamically using manifest file
-		const { loadAllContentEntries } = require('./lib/content-loader');
+		const { loadAllContentEntries } = await import('./lib/content-loader');
 		const actualEntries = await loadAllContentEntries();
 
 		if (actualEntries.length > 0) {
@@ -36,7 +36,6 @@ async function loadActualContent() {
 			console.log(`📄 Total chunks loaded: ${totalChunks}`);
 
 			// Log tags for verification
-			const { getAllTags } = require('./lib/content-manager');
 			const tags = getAllTags();
 			console.log(`🏷️  Available tags: ${tags.length} total`);
 
@@ -50,7 +49,6 @@ async function loadActualContent() {
 
 		// Fallback to sample entries
 		console.log('🔄 Loading fallback sample content...');
-		const { SAMPLE_ENTRIES } = require('./lib/content-manager');
 		loadEntries(SAMPLE_ENTRIES);
 		console.warn('⚠️  Using fallback sample content');
 		return false;
@@ -117,85 +115,21 @@ The MCP server has hit Cloudflare Workers resource limits (CPU time, memory, or 
 This is a rare occurrence on the paid tier - please retry your request.`;
 }
 
-// AI System Prompt
-const AI_SYSTEM_PROMPT = `You are a knowledge assistant with access to ${process.env.ORGANIZATION_NAME || 'organization'} documentation.
+// AI System Prompt - will be initialized with env variables
+let AI_SYSTEM_PROMPT = `You are a Workday CanvasKit documentation assistant. 
 
-When you receive a question, search the knowledge base using the available tools and provide a comprehensive, detailed answer. Aim to be thorough and informative - provide rich context, examples, best practices, and implementation details when relevant. Users are looking for in-depth expertise, not brief summaries.
+CRITICAL: You MUST search the documentation FIRST using search_chunks and/or search_documentation tools, then provide answers based ONLY on what you find.
 
-Structure your response with these two sections:
+RESPONSE FORMAT:
+- Provide direct answers without any section headers
+- NO "📚 From the Knowledge Base" section
+- NO "🧠 From General Knowledge" section  
+- NO section dividers or headers
+- Just give the information directly based on your search results
+- Include code examples and specific details from the documentation
+- Mention source documents naturally in your response when citing information
 
-1. "📚 From the Knowledge Base" section:
-   - PUT HERE: Everything from search_chunks and search_documentation tools
-   - PUT HERE: All content with citations
-   - PUT HERE: All content with source links
-   - NEVER PUT HERE: Your general AI knowledge
-
-2. "🧠 From General Knowledge" section:
-   - PUT HERE: Only your AI training data
-   - PUT HERE: General best practices you know
-   - NEVER PUT HERE: Any MCP search results
-   - NEVER PUT HERE: Any citations or source links
-
-IF YOU PUT CITATIONS IN GENERAL KNOWLEDGE, THE SYSTEM BREAKS.
-IF YOU PUT MCP RESULTS IN GENERAL KNOWLEDGE, THE SYSTEM BREAKS.
-
-⚠️⚠️⚠️ CRITICAL SECTION ASSIGNMENT ⚠️⚠️⚠️
-• Knowledge Base section = MCP search results WITH citations
-• General Knowledge section = Your AI training WITHOUT citations
-• NEVER put citations in General Knowledge
-• NEVER put uncited content in Knowledge Base
-
-CRITICAL SEARCH REQUIREMENT:
-⚠️ You MUST search the knowledge base before claiming any content doesn't exist.
-⚠️ NEVER say "there is no content about X" without first searching for:
-   - The exact term
-   - Variations and synonyms
-   - Related concepts
-
-RESPONSE STRUCTURE (REQUIRED):
-Always structure your response with these two sections in this exact order:
-
-## 📚 From the Knowledge Base
-[CRITICAL: This section MUST contain ONLY the results from your MCP tool searches. Include ALL relevant information found from your searches with proper citations and source links. If searches return results, provide COMPREHENSIVE summaries with their sources. This section should be RICH and DETAILED - more so than general knowledge because it contains specialized, curated content.
-
-⚠️ NEVER PUT GENERAL AI KNOWLEDGE HERE - ONLY MCP SEARCH RESULTS
-✅ This section should be the PRIMARY source of information, with more detail than General Knowledge]
-
-## 🧠 From General Knowledge
-[CRITICAL: This section MUST contain ONLY your built-in training knowledge - NOT MCP search results. Add brief, complementary context that supplements the rich Knowledge Base content above. This section should be SHORTER than Knowledge Base since the MCP has specialized content.
-
-⚠️ NEVER PUT MCP SEARCH RESULTS, CITATIONS, OR SOURCE LINKS HERE - ONLY YOUR TRAINING DATA
-✅ Keep this section concise - the Knowledge Base above has the detailed, authoritative content]
-
-SEARCH STRATEGY:
-1. ALWAYS search using search_chunks for detailed information
-2. ALSO use search_documentation for broader context
-3. If the first search seems incomplete, try variations of the query
-4. The knowledge base may include glossaries and definitions - check these
-
-LINK FORMATTING RULES:
-• ALWAYS use proper Markdown link format: [link text](URL)
-• NEVER show raw URLs alongside linked text
-• Example: ✅ [Documentation Title](https://example.com/docs)
-• Wrong: ❌ https://example.com/docs [Documentation Title]
-• Wrong: ❌ Documentation Title (https://example.com/docs)
-
-SECTION ASSIGNMENT RULES (ABSOLUTELY CRITICAL - NEVER VIOLATE):
-• MCP tool results → "📚 From the Knowledge Base" section ONLY
-• Your training knowledge → "🧠 From General Knowledge" section ONLY
-• Citations and source links → Knowledge Base section ONLY
-• Generic best practices without citations → General Knowledge section ONLY
-• NEVER mix MCP results with training knowledge in the same section
-• If you cite a source, it MUST be in the Knowledge Base section
-• If it comes from a search result, it MUST be in the Knowledge Base section
-
-FORMATTING GUIDELINES:
-• Use natural paragraphs for explanations
-• Bullet points are fine for lists of items or features (but don't overuse)
-• For step-by-step instructions, numbered lists work well
-• Cite sources inline naturally: [Source Name](url)
-
-IMPORTANT: Always search thoroughly using multiple query variations before claiming information doesn't exist in the knowledge base.`;
+If you cannot find information in the documentation, simply state that the information is not available in the CanvasKit documentation.`;
 
 // Available MCP tools for the AI
 const MCP_TOOLS = [
@@ -283,6 +217,7 @@ async function callMcpTool(toolName: string, args: any, env?: any): Promise<stri
 	await ensureContentLoaded();
 
 	switch (toolName) {
+		case "search_documentation":
 		case "search_design_knowledge":
 			// Add timeout to search operations (10 seconds)
 			const searchResults = await withTimeout(
@@ -324,6 +259,11 @@ ${formattedResults}`;
 				preferUrls: true,
 				logDiversity: false
 			});
+
+			console.log(`[Search Debug] Query: "${args.query}", Results: ${chunkResults.length}`);
+			if (chunkResults.length > 0) {
+				console.log(`[Search Debug] First result: ${chunkResults[0].entry.title}`);
+			}
 
 			if (chunkResults.length === 0) {
 				return "No specific information found matching your query.";
@@ -520,7 +460,9 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 		}
 
 		// Handle tool calls
+		console.log('[AI Debug] Tool calls:', response.tool_calls?.length || 0);
 		if (response.tool_calls && response.tool_calls.length > 0) {
+			console.log('[AI Debug] Tools being called:', response.tool_calls.map(tc => tc.function.name));
 			const messages: any[] = [
 				{
 					role: "system",
@@ -603,34 +545,24 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 			}
 		}
 
-		// Validate response for section violations
-		const responseText = response.content || '';
-		const knowledgeBaseMatch = responseText.match(/## 📚 From the Knowledge Base[\s\S]*?(?=## 🧠|$)/);
-		const generalKnowledgeMatch = responseText.match(/## 🧠 From General Knowledge[\s\S]*$/);
-
-		// Check for violations
-		let validationWarning = '';
-		if (generalKnowledgeMatch && generalKnowledgeMatch[0]) {
-			// Check if General Knowledge section contains citations (violation)
-			const citationPattern = /\[([^\]]+)\]/g;
-			const citations = generalKnowledgeMatch[0].match(citationPattern);
-			if (citations && citations.length > 0) {
-				validationWarning = '\n\n⚠️ WARNING: Section violation detected - citations found in General Knowledge section. The AI model may not be following instructions correctly.';
-				console.error('[Validation] VIOLATION: Citations in General Knowledge section:', citations);
-			}
-		}
-
-		if (knowledgeBaseMatch && knowledgeBaseMatch[0]) {
-			// Check if Knowledge Base section is suspiciously empty or generic
-			const kbContent = knowledgeBaseMatch[0].replace(/## 📚 From the Knowledge Base/, '').trim();
-			if (kbContent.length < 100 && !kbContent.includes('no content found')) {
-				validationWarning += '\n\n⚠️ WARNING: Knowledge Base section appears incomplete. MCP search results may not be properly included.';
-				console.error('[Validation] WARNING: Knowledge Base section too short');
-			}
-		}
+		// Clean up response to remove unwanted sections
+		let cleanedResponse = response.content || '';
+		
+		// Remove "From the Knowledge Base" section header and just keep the content
+		cleanedResponse = cleanedResponse.replace(/##\s*📚\s*From the Knowledge Base\s*\n+/gi, '');
+		
+		// Remove entire "From General Knowledge" section
+		cleanedResponse = cleanedResponse.replace(/##\s*🧠\s*From General Knowledge[\s\S]*/gi, '');
+		
+		// Also remove variations without emojis
+		cleanedResponse = cleanedResponse.replace(/##\s*From the Knowledge Base\s*\n+/gi, '');
+		cleanedResponse = cleanedResponse.replace(/##\s*From General Knowledge[\s\S]*/gi, '');
+		
+		// Trim any extra whitespace
+		cleanedResponse = cleanedResponse.trim();
 
 		return new Response(JSON.stringify({
-			response: response.content + validationWarning
+			response: cleanedResponse
 		}), {
 			headers: { ...corsHeaders, "Content-Type": "application/json" }
 		});
@@ -679,15 +611,14 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 	}
 }
 
-// Create MCP server instance
-const server = new McpServer({
-	name: `${process.env.ORGANIZATION_NAME || 'Organization'} Documentation`,
-	version: "1.0.0",
-});
+// Create MCP server instance - will be initialized in handler
+let server: any = null;
 
-// Initialize MCP tools
-server.tool(
-	"search_design_knowledge",
+// Function to initialize MCP tools
+function initializeMcpTools(server: any) {
+	// Initialize MCP tools
+	server.tool(
+		"search_design_knowledge",
 	{
 		query: z.string().describe("Search query for design system knowledge"),
 		category: z.string()
@@ -846,6 +777,7 @@ ${tags.map(tag => `<span style="background: #f0f0f0; padding: 2px 6px; border-ra
 		};
 	}
 );
+} // End of initializeMcpTools function
 
 // Simple request handler with timeout
 async function handleMcpRequest(request: Request, env?: Env): Promise<Response> {
@@ -915,7 +847,7 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 						prompts: {}
 					},
 					serverInfo: {
-						name: `${process.env.ORGANIZATION_NAME || 'Organization'} Documentation`,
+						name: `${env?.ORGANIZATION_NAME || 'Organization'} Documentation`,
 						version: "1.0.0"
 					}
 				}
@@ -1244,6 +1176,97 @@ ${tagList}`
 
 export default {
 	fetch(request: Request, env: Env, ctx: ExecutionContext) {
+		// Initialize AI_SYSTEM_PROMPT with env variables
+		AI_SYSTEM_PROMPT = `You are a knowledge assistant with access to ${env.ORGANIZATION_NAME || 'organization'} documentation.
+
+When you receive a question, search the knowledge base using the available tools and provide a comprehensive, detailed answer. Aim to be thorough and informative - provide rich context, examples, best practices, and implementation details when relevant. Users are looking for in-depth expertise, not brief summaries.
+
+Structure your response with these two sections:
+
+1. "📚 From the Knowledge Base" section:
+   - PUT HERE: Everything from search_chunks and search_documentation tools
+   - PUT HERE: All content with citations
+   - PUT HERE: All content with source links
+   - NEVER PUT HERE: Your general AI knowledge
+
+2. "🧠 From General Knowledge" section:
+   - PUT HERE: Only your AI training data
+   - PUT HERE: General best practices you know
+   - NEVER PUT HERE: Any MCP search results
+   - NEVER PUT HERE: Any citations or source links
+
+IF YOU PUT CITATIONS IN GENERAL KNOWLEDGE, THE SYSTEM BREAKS.
+IF YOU PUT MCP RESULTS IN GENERAL KNOWLEDGE, THE SYSTEM BREAKS.
+
+⚠️⚠️⚠️ CRITICAL SECTION ASSIGNMENT ⚠️⚠️⚠️
+• Knowledge Base section = MCP search results WITH citations
+• General Knowledge section = Your AI training WITHOUT citations
+• NEVER put citations in General Knowledge
+• NEVER put uncited content in Knowledge Base
+
+CRITICAL SEARCH REQUIREMENT:
+⚠️ You MUST search the knowledge base before claiming any content doesn't exist.
+⚠️ NEVER say "there is no content about X" without first searching for:
+   - The exact term
+   - Variations and synonyms
+   - Related concepts
+
+RESPONSE STRUCTURE (REQUIRED):
+Always structure your response with these two sections in this exact order:
+
+## 📚 From the Knowledge Base
+[CRITICAL: This section MUST contain ONLY the results from your MCP tool searches. Include ALL relevant information found from your searches with proper citations and source links. If searches return results, provide COMPREHENSIVE summaries with their sources. This section should be RICH and DETAILED - more so than general knowledge because it contains specialized, curated content.
+
+⚠️ NEVER PUT GENERAL AI KNOWLEDGE HERE - ONLY MCP SEARCH RESULTS
+✅ This section should be the PRIMARY source of information, with more detail than General Knowledge]
+
+## 🧠 From General Knowledge
+[CRITICAL: This section MUST contain ONLY your built-in training knowledge - NOT MCP search results. Add brief, complementary context that supplements the rich Knowledge Base content above. This section should be SHORTER than Knowledge Base since the MCP has specialized content.
+
+⚠️ NEVER PUT MCP SEARCH RESULTS, CITATIONS, OR SOURCE LINKS HERE - ONLY YOUR TRAINING DATA
+✅ Keep this section concise - the Knowledge Base above has the detailed, authoritative content]
+
+SEARCH STRATEGY:
+1. ALWAYS search using search_chunks for detailed information
+2. ALSO use search_documentation for broader context
+3. If the first search seems incomplete, try variations of the query
+4. The knowledge base may include glossaries and definitions - check these
+
+LINK FORMATTING RULES:
+• ALWAYS use proper Markdown link format: [link text](URL)
+• NEVER show raw URLs alongside linked text
+• Example: ✅ [Documentation Title](https://example.com/docs)
+• Wrong: ❌ https://example.com/docs [Documentation Title]
+• Wrong: ❌ Documentation Title (https://example.com/docs)
+
+SECTION ASSIGNMENT RULES (ABSOLUTELY CRITICAL - NEVER VIOLATE):
+• MCP tool results → "📚 From the Knowledge Base" section ONLY
+• Your training knowledge → "🧠 From General Knowledge" section ONLY
+• Citations and source links → Knowledge Base section ONLY
+• Generic best practices without citations → General Knowledge section ONLY
+• NEVER mix MCP results with training knowledge in the same section
+• If you cite a source, it MUST be in the Knowledge Base section
+• If it comes from a search result, it MUST be in the Knowledge Base section
+
+FORMATTING GUIDELINES:
+• Use natural paragraphs for explanations
+• Bullet points are fine for lists of items or features (but don't overuse)
+• For step-by-step instructions, numbered lists work well
+• Cite sources inline naturally: [Source Name](url)
+
+IMPORTANT: Always search thoroughly using multiple query variations before claiming information doesn't exist in the knowledge base.`;
+
+		// Initialize MCP server if not already done
+		if (!server) {
+			server = new McpServer({
+				name: `${env.ORGANIZATION_NAME || 'Organization'} Documentation`,
+				version: "1.0.0",
+			});
+			
+			// Initialize MCP tools
+			initializeMcpTools(server);
+		}
+
 		const url = new URL(request.url);
 
 		if (url.pathname === "/mcp") {
@@ -1262,31 +1285,31 @@ export default {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${process.env.ORGANIZATION_NAME || 'Organization'} Documentation Assistant</title>
-    <meta name="description" content="MCP (Model Context Protocol) server with ${process.env.ORGANIZATION_NAME || 'organization'} documentation. Search through curated resources to get expert answers.">
+    <title>${env.ORGANIZATION_NAME || 'Organization'} Documentation Assistant</title>
+    <meta name="description" content="MCP (Model Context Protocol) server with ${env.ORGANIZATION_NAME || 'organization'} documentation. Search through curated resources to get expert answers.">
 
     <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1080 482'%3E%3Cstyle%3E.st1%7Bfill:%23333333%7D@media (prefers-color-scheme:dark)%7B.st1%7Bfill:%23ffffff%7D%7D%3C/style%3E%3Cpath class='st1' d='M439.7 462.3c-12 0-22.1 4.8-30.1 16.8l-32.7-192.9 2.6-1.4C422.9 351 490.5 392 549.4 392c42.9 0 71-17.4 71-46.9 0-30.1-39.5-44.9-102.3-66.3-59.6-21.4-133.2-54.3-133.2-140.8 0-77.7 71-138 170-138 54.9 0 81 15.4 99.7 15.4 10.8 0 18.1-3.4 25.4-12.8l21.4 170.7-2.6 1.4c-32.1-54.3-86.4-85.7-142.5-85.7-44.1 0-73.6 20.2-73.6 46.9 0 30.2 38.9 42.9 79.6 58.9 70.2 24.2 158 57.5 157.2 148.8 0 80.3-70.2 138.6-164 138.6C497.9 482.2 460.4 462.3 439.7 462.3z'/%3E%3Cpath class='st1' d='M831.5 2.5l126.3 236.7L830.4 477.9h124.2L1080 239.2 956.8 2.5H831.5z'/%3E%3Cpath class='st1' d='M125.4 2.5L0 241.2l123.2 236.7h125.2L122.2 241.2 249.6 2.5H125.4z'/%3E%3C/svg%3E">
 
     <!-- Open Graph / Social Media Meta Tags -->
     <meta property="og:type" content="website">
-    <meta property="og:title" content="${process.env.ORGANIZATION_NAME || 'Organization'} Documentation Assistant">
-    <meta property="og:description" content="MCP server with ${process.env.ORGANIZATION_NAME || 'organization'} documentation and curated resources.">
-    <meta property="og:url" content="${process.env.ORGANIZATION_DOMAIN || 'example.com'}">
-    <meta property="og:image" content="${process.env.ORGANIZATION_DOMAIN || 'example.com'}/og-image.png">
+    <meta property="og:title" content="${env.ORGANIZATION_NAME || 'Organization'} Documentation Assistant">
+    <meta property="og:description" content="MCP server with ${env.ORGANIZATION_NAME || 'organization'} documentation and curated resources.">
+    <meta property="og:url" content="${env.ORGANIZATION_DOMAIN || 'example.com'}">
+    <meta property="og:image" content="${env.ORGANIZATION_DOMAIN || 'example.com'}/og-image.png">
     <meta property="og:image:width" content="900">
     <meta property="og:image:height" content="630">
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="${process.env.ORGANIZATION_NAME || 'Organization'} Documentation">
-    <meta name="twitter:description" content="MCP server with ${process.env.ORGANIZATION_NAME || 'organization'} documentation and curated resources">
-    <meta name="twitter:image" content="${process.env.ORGANIZATION_DOMAIN || 'example.com'}/og-image.png">
+    <meta name="twitter:title" content="${env.ORGANIZATION_NAME || 'Organization'} Documentation">
+    <meta name="twitter:description" content="MCP server with ${env.ORGANIZATION_NAME || 'organization'} documentation and curated resources">
+    <meta name="twitter:image" content="${env.ORGANIZATION_DOMAIN || 'example.com'}/og-image.png">
 
     <!-- Additional Meta -->
     <meta name="theme-color" content="#339af0">
     <meta name="author" content="Southleft">
-    <link rel="canonical" href="${process.env.ORGANIZATION_DOMAIN || 'example.com'}">
+    <link rel="canonical" href="${env.ORGANIZATION_DOMAIN || 'example.com'}">
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -1547,7 +1570,7 @@ export default {
         function ChatApp() {
             const [messages, setMessages] = useState([{
                 type: 'system',
-                content: `🎯 Welcome! I'm your AI documentation assistant for ${process.env.ORGANIZATION_NAME || 'the organization'}. I can search through the knowledge base and provide expert answers.\n\n💡 Ask me anything about our documentation and processes!`
+                content: \`🎯 Welcome! I'm your AI documentation assistant for ${env.ORGANIZATION_NAME || 'the organization'}. I can search through the knowledge base and provide expert answers.\n\n💡 Ask me anything about our documentation and processes!\`
             }]);
             const [inputValue, setInputValue] = useState('');
             const [isLoading, setIsLoading] = useState(false);
@@ -2132,7 +2155,7 @@ export default {
                         marginTop: 'auto'
                     }}>
                         <Text size="sm" style={{ color: '#6c6f75', fontSize: '13px', marginBottom: '8px' }}>
-                            🤖 MCP Server for ${process.env.ORGANIZATION_NAME || 'Documentation'} • Powered by curated knowledge base
+                            🤖 MCP Server for ${env.ORGANIZATION_NAME || 'Documentation'} • Powered by curated knowledge base
                         </Text>
                         <Text size="sm" style={{ color: '#6c6f75', fontSize: '13px' }}>
                             Made with ❤️ by{' '}
@@ -2331,7 +2354,7 @@ export default {
 		if (url.pathname === "/health") {
 			return new Response(JSON.stringify({
 				status: "ok",
-				service: `${process.env.ORGANIZATION_NAME || 'Documentation'} MCP`,
+				service: `${env.ORGANIZATION_NAME || 'Documentation'} MCP`,
 				version: "1.0.0"
 			}), {
 				headers: {
@@ -2341,7 +2364,7 @@ export default {
 			});
 		}
 
-		return new Response(`${process.env.ORGANIZATION_NAME || 'Documentation'} MCP Server - Use /mcp or /ai-chat endpoints`, {
+		return new Response(`${env.ORGANIZATION_NAME || 'Documentation'} MCP Server - Use /mcp or /ai-chat endpoints`, {
 			status: 200,
 			headers: {
 				"Content-Type": "text/plain",

@@ -4,7 +4,7 @@
  */
 
 import pdfParse from 'pdf-parse';
-import { ContentEntry, ContentMetadata, SourceType } from "../../types/content";
+import { ContentEntry, ContentMetadata, SourceType } from "../../src/lib/content";
 import { chunkBySection } from "../../src/lib/chunker";
 import { generateId } from "../../src/lib/id-generator";
 

@@ -7,8 +7,8 @@
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
-import { loadAllContentEntries } from '../src/lib/content-loader';
-import { ContentEntry } from '../types/content';
+import { loadAllContentEntries } from '../../src/lib/content-loader';
+import { ContentEntry } from '../../src/lib/content';
 
 // Initialize clients
 const supabase = createClient(
@@ -57,17 +57,17 @@ function chunkText(text: string, chunkSize: number = 1000): string[] {
 
 async function main() {
   console.log('🚀 Starting Supabase Vector Ingestion');
-  console.log('📊 Table: design_system_content');
+  console.log('📊 Tables: content_entries & content_chunks');
   console.log('');
 
   // Check if table exists
   const { count: existingCount } = await supabase
-    .from('design_system_content')
+    .from('content_entries')
     .select('*', { count: 'exact', head: true });
   
   if (existingCount === null) {
-    console.error('❌ Table "design_system_content" does not exist!');
-    console.error('Please run the SQL in SUPABASE_SETUP.md first.');
+    console.error('❌ Table "content_entries" does not exist!');
+    console.error('Please run the SQL from database/schema.sql in Supabase first.');
     process.exit(1);
   }
 
@@ -76,13 +76,24 @@ async function main() {
   // Clear existing data
   if (existingCount > 0) {
     console.log('🗑️  Clearing existing data...');
+    // First delete chunks (they reference entries)
+    const { error: deleteChunksError } = await supabase
+      .from('content_chunks')
+      .delete()
+      .neq('id', 0);
+    
+    if (deleteChunksError) {
+      console.error('Error clearing chunks:', deleteChunksError);
+    }
+    
+    // Then delete entries
     const { error: deleteError } = await supabase
-      .from('design_system_content')
+      .from('content_entries')
       .delete()
       .neq('id', '');
     
     if (deleteError) {
-      console.error('Error clearing data:', deleteError);
+      console.error('Error clearing entries:', deleteError);
     }
   }
 
@@ -109,43 +120,55 @@ async function main() {
         // Create chunks
         const chunks = chunkText(entry.content);
         
-        // Process each chunk
-        for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-          const chunkText = chunks[chunkIndex];
-          const chunkId = chunks.length > 1 
-            ? `${entry.id}_chunk_${chunkIndex}` 
-            : entry.id;
-          
-          // Generate embedding for chunk
-          const embeddingText = chunks.length > 1
-            ? `${entry.title}\n\n${chunkText}`
-            : `${entry.title}\n\n${entry.content}`;
-          
-          const embedding = await generateEmbedding(embeddingText);
-          
-          // Prepare record
-          const record = {
-            id: chunkId,
-            title: entry.title,
-            content: chunkText,
-            source_type: sourceType,
-            source_path: sourcePath,
-            url: entry.source?.url || null,
-            category: entry.metadata?.category || null,
-            tags: entry.metadata?.tags || [],
-            metadata: entry.metadata || {},
-            chunk_index: chunkIndex,
-            total_chunks: chunks.length,
-            embedding
-          };
-          
-          // Insert into database
-          const { error } = await supabase
-            .from('design_system_content')
-            .upsert(record);
-          
-          if (error) {
-            throw error;
+        // First, insert the main entry
+        const mainEmbedding = await generateEmbedding(`${entry.title}\n\n${entry.content}`);
+        
+        const entryRecord = {
+          id: entry.id,
+          title: entry.title,
+          content: entry.content,
+          source_type: sourceType,
+          source_location: sourcePath,
+          category: entry.metadata?.category || null,
+          system_name: entry.metadata?.system_name || null,
+          tags: entry.metadata?.tags || [],
+          confidence: entry.metadata?.confidence || 'medium',
+          embedding: mainEmbedding,
+          metadata: entry.metadata || {},
+          ingested_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        
+        const { error: entryError } = await supabase
+          .from('content_entries')
+          .upsert(entryRecord);
+        
+        if (entryError) {
+          throw entryError;
+        }
+        
+        // Then insert chunks if there are multiple
+        if (chunks.length > 1) {
+          for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+            const chunkText = chunks[chunkIndex];
+            const chunkEmbedding = await generateEmbedding(chunkText);
+            
+            const chunkRecord = {
+              entry_id: entry.id,
+              chunk_index: chunkIndex,
+              chunk_text: chunkText,
+              embedding: chunkEmbedding,
+              metadata: { chunk_size: chunkText.length },
+              created_at: new Date().toISOString()
+            };
+            
+            const { error: chunkError } = await supabase
+              .from('content_chunks')
+              .insert(chunkRecord);
+            
+            if (chunkError) {
+              console.error(`Error inserting chunk ${chunkIndex}:`, chunkError);
+            }
           }
         }
         
@@ -169,7 +192,7 @@ async function main() {
   
   // Verify final count
   const { count: finalCount } = await supabase
-    .from('design_system_content')
+    .from('content_entries')
     .select('*', { count: 'exact', head: true });
   
   console.log(`📚 Total documents in database: ${finalCount}`);

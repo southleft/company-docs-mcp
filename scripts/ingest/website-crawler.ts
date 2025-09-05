@@ -2,7 +2,7 @@
  * Website crawler for recursive ingestion of all pages within a domain
  */
 
-import { ContentEntry, ContentMetadata } from "../../types/content";
+import { ContentEntry, ContentMetadata } from "../../src/lib/content";
 import { fetchURL, URLFetchOptions } from "./url-fetcher";
 import { generateId } from "../../src/lib/id-generator";
 import * as fs from 'fs';

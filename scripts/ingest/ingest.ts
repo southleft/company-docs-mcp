@@ -3,7 +3,7 @@
  * Handles ingesting content from various sources and saving as JSON entries
  */
 
-import { ContentEntry, IngestionOptions, ContentMetadata } from "../../types/content";
+import { ContentEntry, ContentMetadata, SourceType, IngestionOptions } from "../../src/lib/content";
 import { parseHTML } from "./html-parser";
 import { fetchURL } from "./url-fetcher";
 import * as fs from 'node:fs/promises';

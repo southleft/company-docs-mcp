@@ -4,7 +4,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { ContentEntry, ContentMetadata, Category } from "../../types/content";
+import { ContentEntry, ContentMetadata, Category } from "../../src/lib/content";
 import { fetchURL, URLFetchOptions } from "./url-fetcher";
 import { generateId } from "../../src/lib/id-generator";
 
