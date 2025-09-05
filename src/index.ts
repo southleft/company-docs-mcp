@@ -12,6 +12,7 @@ import { searchChunksEnhanced as searchChunks } from "./lib/content-manager-enha
 import { searchWithSupabase as searchEntries } from "./lib/search-handler";
 import { formatSourceReference, formatInlineCitation } from "./lib/source-formatter";
 import { Category, ContentEntry } from "./lib/content";
+import { handleSlackCommand } from "./slack-webhook";
 
 // OpenAI integration
 import { OpenAI } from "openai";
@@ -1175,7 +1176,7 @@ ${tagList}`
 }
 
 export default {
-	fetch(request: Request, env: Env, ctx: ExecutionContext) {
+	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
 		// Initialize AI_SYSTEM_PROMPT with env variables
 		AI_SYSTEM_PROMPT = `You are a knowledge assistant with access to ${env.ORGANIZATION_NAME || 'organization'} documentation.
 
@@ -1273,9 +1274,45 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 			return handleMcpRequest(request, env);
 		}
 
-		if (url.pathname === "/ai-chat") {
-			return handleAiChat(request, env);
+	if (url.pathname === "/ai-chat") {
+		return handleAiChat(request, env);
+	}
+
+	if (url.pathname === "/slack" && request.method === "POST") {
+		// Ensure content is loaded for Slack commands
+		await ensureContentLoaded();
+		return handleSlackCommand(request, env);
+	}
+
+	// Simple JSON search endpoint for Slack Socket Mode bot and other clients
+	if (url.pathname === "/search" && request.method === "POST") {
+		await ensureContentLoaded();
+		try {
+			const { query, limit = 5 } = await request.json() as any;
+			if (!query || typeof query !== 'string') {
+				return new Response(JSON.stringify({ error: 'Invalid query' }), { status: 400, headers: { "Content-Type": "application/json" }});
+			}
+			const results = searchChunks(query, limit, { enableDiversity: true, maxPerSource: 2, preferUrls: true });
+			const mapped = results.map(r => {
+				const { url } = formatSourceReference(r.entry);
+				// Clean and truncate text for API consumers
+				const cleanText = (r.chunk.text || '')
+					.replace(/^[\-\*•]\s*/gm, '')
+					.replace(/\n{3,}/g, '\n\n')
+					.replace(/^#+\s*/gm, '')
+					.trim();
+				return {
+					title: r.entry.title,
+					content: cleanText,
+					source: url || r.entry.source?.location || '',
+					relevance: r.score ?? 0
+				};
+			});
+			return new Response(JSON.stringify({ results: mapped, total: mapped.length, query }), { headers: { "Content-Type": "application/json" }});
+		} catch (e: any) {
+			return new Response(JSON.stringify({ error: e?.message || 'Search failed' }), { status: 500, headers: { "Content-Type": "application/json" }});
 		}
+	}
 
 		// Serve the AI chat interface
 		if (url.pathname === "/" || url.pathname === "/chat") {

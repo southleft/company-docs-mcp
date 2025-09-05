@@ -30,11 +30,13 @@
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.0.7",
+		"@slack/bolt": "^4.4.0",
 		"@supabase/supabase-js": "^2.56.1",
 		"@types/cheerio": "^0.22.35",
 		"agents": "^0.0.95",
 		"cheerio": "^1.1.0",
 		"dotenv": "^17.2.1",
+		"node-fetch": "^2.7.0",
 		"openai": "^4.67.3",
 		"pdf-parse": "^1.1.1",
 		"uuid": "^11.1.0",

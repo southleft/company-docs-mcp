@@ -168,34 +168,55 @@ docker run -p 3000:3000 --env-file .env company-docs-mcp
 
 ## Slack Bot Setup (Optional)
 
-### 1. Create Slack App
+There are two ways to run the Slack integration:
+- Option A (local, recommended): Socket Mode — no public URL needed
+- Option B (webhook): Cloudflare Worker endpoint `/slack`
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps)
-2. Click "Create New App" → "From manifest"
-3. Use the manifest from `config/slack-manifest.json`
-4. Install the app to your workspace
+See the detailed guide in [docs/SLACK_SETUP.md](docs/SLACK_SETUP.md). Quick start below.
 
-### 2. Configure Bot
+### Option A — Local Development (Socket Mode)
 
+1) Create a Slack app and enable Socket Mode
+- Add bot scopes: `commands`, `chat:write`
+- Create an App‑Level Token with `connections:write`
+- Create a Slash Command (e.g., `/docs`) — with Socket Mode you do NOT need a Request URL
+- Install the app to your workspace
+
+2) Configure `.env`
+```env
+SLACK_BOT_TOKEN="xoxb-..."
+SLACK_APP_TOKEN="xapp-..."   # App‑Level Token
+SLACK_SIGNING_SECRET="..."
+SLACK_SLASH_COMMAND="/docs"
+MCP_ENDPOINT="http://localhost:8787"  # Bot calls the local Worker /search API
+```
+
+3) Run locally (two terminals)
 ```bash
-# Run Slack setup wizard
-npm run slack:setup
+# Terminal A — start the Worker (serves /search)
+npm run dev
 
-# Start the bot locally
+# Terminal B — start Slack Socket Mode bot
 npm run slack:start
-
-# Or deploy to production
-npm run slack:deploy
 ```
 
-### 3. Usage in Slack
+Usage in Slack:
+```
+/docs breakpoints
+/docs typography
+/docs switches
+```
+The bot will:
+- Search locally via `/search`
+- Use OpenAI to synthesize a polished answer
+- Post a Slack‑formatted reply with a Sources list
 
-Team members can query documentation:
-```
-/docs How do I set up authentication?
-/docs What is our API rate limit?
-/docs Show me the deployment process
-```
+### Option B — Webhook via Worker
+- Disable Socket Mode or use a separate slash command
+- Set Request URL to `https://<your-worker>.workers.dev/slack`
+- Start the Worker: `npm run dev` (or `npm run deploy` for production)
+
+Usage in Slack (same as above).
 
 ## Content Organization
 
