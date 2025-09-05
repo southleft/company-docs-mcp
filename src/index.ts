@@ -1292,8 +1292,28 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 			if (!query || typeof query !== 'string') {
 				return new Response(JSON.stringify({ error: 'Invalid query' }), { status: 400, headers: { "Content-Type": "application/json" }});
 			}
-			const results = searchChunks(query, limit, { enableDiversity: true, maxPerSource: 2, preferUrls: true });
-			const mapped = results.map(r => {
+			
+			// Try Supabase first if available, otherwise use local chunks
+			let mapped;
+			if (env?.SUPABASE_URL && env?.SUPABASE_ANON_KEY) {
+				// Use searchEntries which checks Supabase
+				const entries = await searchEntries({ query, limit }, env);
+				mapped = entries.map(e => ({
+					title: e.title,
+					content: e.content.slice(0, 500),
+					source: e.metadata?.source || e.metadata?.source_url || e.source?.location || '',
+					relevance: 1,
+					metadata: {
+						category: e.metadata?.category,
+						tags: e.metadata?.tags,
+						system: e.metadata?.system,
+						source: e.metadata?.source || e.metadata?.source_url
+					}
+				}));
+			} else {
+				// Fallback to local chunks
+				const results = searchChunks(query, limit, { enableDiversity: true, maxPerSource: 2, preferUrls: true });
+				mapped = results.map(r => {
 				const { url } = formatSourceReference(r.entry);
 				// Clean and truncate text for API consumers
 				const cleanText = (r.chunk.text || '')
@@ -1314,7 +1334,8 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 						source: r.entry.metadata?.source || r.entry.metadata?.source_url
 					}
 				};
-			});
+				});
+			}
 			return new Response(JSON.stringify({ results: mapped, total: mapped.length, query }), { headers: { "Content-Type": "application/json" }});
 		} catch (e: any) {
 			return new Response(JSON.stringify({ error: e?.message || 'Search failed' }), { status: 500, headers: { "Content-Type": "application/json" }});
