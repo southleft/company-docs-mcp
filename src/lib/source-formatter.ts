@@ -42,10 +42,11 @@ export function formatSourceReference(entry: ContentEntry): {
     }
   }
   
-  // Handle URL sources
-  if (entry.source?.type === 'url' || entry.id.includes('url')) {
+  // Handle URL sources - check multiple metadata fields
+  const urlMatch = entry.metadata?.source || entry.metadata?.source_url || entry.source?.location || '';
+  
+  if (entry.source?.type === 'url' || entry.id.includes('url') || urlMatch.startsWith('http')) {
     // Extract clean domain name from URL entries
-    const urlMatch = entry.metadata?.source_url || entry.source?.location || '';
     if (urlMatch.startsWith('http')) {
       try {
         const url = new URL(urlMatch);
@@ -64,7 +65,7 @@ export function formatSourceReference(entry: ContentEntry): {
   // Fallback to clean title
   return {
     displayName: cleanTitle(entry.title),
-    url: entry.metadata?.source_url || null,
+    url: entry.metadata?.source || entry.metadata?.source_url || null,
     isBook: false
   };
 }

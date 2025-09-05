@@ -11,6 +11,10 @@ interface SearchResult {
   content: string;
   source: string;
   relevance: number;
+  metadata?: {
+    source?: string;
+    [key: string]: any;
+  };
 }
 
 interface MCPResponse {
@@ -163,7 +167,7 @@ class DocumentationBot {
 - short paragraphs and bullet points where helpful
 - code blocks for code
 - clear, professional tone for a design system/dev audience
-Include a short "Sources" list with titles as markdown links if URLs are provided. Do NOT include any sections like 'From the Knowledge Base'.`;
+Important: DO NOT include a "Sources" section or numeric footnotes like (1), (2), etc. The system will append sources automatically. Do NOT include any sections like 'From the Knowledge Base'.`;
 
     const userMsg = `Question: ${query}\n\nSources:\n${sourcesForAI.map(s => `(${s.index}) ${s.title}${s.url ? ` - ${s.url}` : ''}\n---\n${s.excerpt}`).join('\n\n')}`;
 
@@ -294,8 +298,21 @@ Include a short "Sources" list with titles as markdown links if URLs are provide
     return str;
   }
 
+  private stripAIGeneratedSources(text: string): string {
+    // Remove trailing AI-generated 'Sources' blocks or footnotes
+    const idx = text.search(/\n\s*Sources\s*:?.*$/i);
+    if (idx >= 0) {
+      const tail = text.slice(idx);
+      if (/\n\s*-\s*\[/.test(tail) || /\(\d+\)/.test(tail)) {
+        return text.slice(0, idx).trim();
+      }
+    }
+    return text;
+  }
+
   private formatAISlackResponse(aiText: string, results: MCPResponse, query: string): any {
-    const mrkdwn = this.toSlackMrkdwn(aiText).slice(0, 2900);
+    const cleaned = this.stripAIGeneratedSources(aiText);
+    const mrkdwn = this.toSlackMrkdwn(cleaned).slice(0, 2900);
 
     const blocks: any[] = [
       {
@@ -313,15 +330,22 @@ Include a short "Sources" list with titles as markdown links if URLs are provide
       }
     ];
 
-    // Build sources list if we have any http links
-    const httpSources = results.results
-      .filter(r => this.isHttpUrl(r.source))
-      .slice(0, 5);
+    // Build sources list - use metadata source URL if available, otherwise check source field
+    const sources = results.results.slice(0, 5).map(r => {
+      // Check metadata.source first (from frontmatter), then r.source
+      const url = r.metadata?.source || r.source;
+      const hasLink = this.isHttpUrl(url);
+      return {
+        title: r.title,
+        url: hasLink ? url : undefined
+      };
+    });
 
-    if (httpSources.length > 0) {
-      const sourcesText = httpSources
-        .map((r) => `• <${r.source}|${r.title}>`)
+    if (sources.length > 0) {
+      const sourcesText = sources
+        .map(s => s.url ? `• <${s.url}|${s.title}>` : `• ${s.title}`)
         .join('\n');
+      
       blocks.push({ type: 'divider' });
       blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*Sources*\n${sourcesText}` } });
     }

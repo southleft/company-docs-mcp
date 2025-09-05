@@ -1305,7 +1305,14 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 					title: r.entry.title,
 					content: cleanText,
 					source: url || r.entry.source?.location || '',
-					relevance: r.score ?? 0
+					relevance: r.score ?? 0,
+					// Include metadata with source URL from frontmatter
+					metadata: {
+						category: r.entry.metadata?.category,
+						tags: r.entry.metadata?.tags,
+						system: r.entry.metadata?.system,
+						source: r.entry.metadata?.source || r.entry.metadata?.source_url
+					}
 				};
 			});
 			return new Response(JSON.stringify({ results: mapped, total: mapped.length, query }), { headers: { "Content-Type": "application/json" }});
