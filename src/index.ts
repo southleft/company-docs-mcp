@@ -117,14 +117,14 @@ This is a rare occurrence on the paid tier - please retry your request.`;
 }
 
 // AI System Prompt - will be initialized with env variables
-let AI_SYSTEM_PROMPT = `You are a Workday CanvasKit documentation assistant. 
+let AI_SYSTEM_PROMPT = `You are a Workday CanvasKit documentation assistant.
 
 CRITICAL: You MUST search the documentation FIRST using search_chunks and/or search_documentation tools, then provide answers based ONLY on what you find.
 
 RESPONSE FORMAT:
 - Provide direct answers without any section headers
 - NO "📚 From the Knowledge Base" section
-- NO "🧠 From General Knowledge" section  
+- NO "🧠 From General Knowledge" section
 - NO section dividers or headers
 - Just give the information directly based on your search results
 - Include code examples and specific details from the documentation
@@ -353,7 +353,7 @@ async function handleAiChat(request: Request, env: any): Promise<Response> {
 				headers: { ...corsHeaders, "Content-Type": "application/json" }
 			});
 		}
-		
+
 		// Re-throw other errors to be handled by main error handler
 		throw error;
 	});
@@ -452,7 +452,7 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 		}
 
 		let response = completion.choices[0].message;
-		
+
 		// Only validate content if there are no tool calls
 		// When OpenAI makes tool calls, response.content is intentionally empty
 		if ((!response || !response.content) && (!response.tool_calls || response.tool_calls.length === 0)) {
@@ -501,7 +501,7 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 					if (error.message.includes('timed out')) {
 						errorMessage = `Tool operation timed out. This can happen with complex searches or when external services are slow. The search may still be partially successful.`;
 					}
-					
+
 					messages.push({
 						role: "tool",
 						tool_call_id: toolCall.id,
@@ -533,7 +533,7 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 				);
 
 				response = finalCompletion.choices[0].message;
-				
+
 				// Validate final response
 				if (!response || !response.content) {
 					console.error('[ERROR] Final OpenAI returned no content');
@@ -548,17 +548,17 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 
 		// Clean up response to remove unwanted sections
 		let cleanedResponse = response.content || '';
-		
+
 		// Remove "From the Knowledge Base" section header and just keep the content
 		cleanedResponse = cleanedResponse.replace(/##\s*📚\s*From the Knowledge Base\s*\n+/gi, '');
-		
+
 		// Remove entire "From General Knowledge" section
 		cleanedResponse = cleanedResponse.replace(/##\s*🧠\s*From General Knowledge[\s\S]*/gi, '');
-		
+
 		// Also remove variations without emojis
 		cleanedResponse = cleanedResponse.replace(/##\s*From the Knowledge Base\s*\n+/gi, '');
 		cleanedResponse = cleanedResponse.replace(/##\s*From General Knowledge[\s\S]*/gi, '');
-		
+
 		// Trim any extra whitespace
 		cleanedResponse = cleanedResponse.trim();
 
@@ -807,7 +807,7 @@ async function handleMcpRequest(request: Request, env?: Env): Promise<Response> 
 				headers: { ...corsHeaders, "Content-Type": "application/json" }
 			});
 		}
-		
+
 		// Re-throw other errors to be handled by main error handler
 		throw error;
 	});
@@ -1275,7 +1275,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 				name: `${env.ORGANIZATION_NAME || 'Organization'} Documentation`,
 				version: "1.0.0",
 			});
-			
+
 			// Initialize MCP tools
 			initializeMcpTools(server);
 		}
@@ -1304,7 +1304,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 			if (!query || typeof query !== 'string') {
 				return new Response(JSON.stringify({ error: 'Invalid query' }), { status: 400, headers: { "Content-Type": "application/json" }});
 			}
-			
+
 			// Debug: Log environment availability
 			console.log('[Search] Env check:', {
 				hasSupabaseUrl: !!env?.SUPABASE_URL,
@@ -1312,7 +1312,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 				vectorEnabled: env?.VECTOR_SEARCH_ENABLED,
 				vectorMode: env?.VECTOR_SEARCH_MODE
 			});
-			
+
 			// Try Supabase first if available, otherwise use local chunks
 			let mapped;
 			if (env?.SUPABASE_URL && env?.SUPABASE_ANON_KEY) {
@@ -1631,20 +1631,31 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
             />
         );
 
-        const Badge = ({ children, variant = 'light', color = 'blue', size = 'sm', style = {} }) => (
-            <span style={{
-                display: 'inline-block',
-                padding: size === 'sm' ? '4px 8px' : '6px 12px',
-                backgroundColor: color === 'green' ? '#2f5233' : '#1e3a5f',
-                color: color === 'green' ? '#51cf66' : '#339af0',
-                borderRadius: '4px',
-                fontSize: '12px',
-                fontWeight: '500',
-                ...style
-            }}>
-                {children}
-            </span>
-        );
+        const Badge = ({ children, variant = 'light', color = 'blue', size = 'sm', style = {}, title = '' }) => {
+            const getColors = () => {
+                if (color === 'green') return { bg: '#2f5233', text: '#51cf66' };
+                if (color === 'red') return { bg: '#5f2f2f', text: '#ff6b6b' };
+                if (color === 'yellow') return { bg: '#5f4f2f', text: '#ffd43b' };
+                return { bg: '#1e3a5f', text: '#339af0' };
+            };
+
+            const colors = getColors();
+
+            return (
+                <span style={{
+                    display: 'inline-block',
+                    padding: size === 'sm' ? '4px 8px' : '6px 12px',
+                    backgroundColor: colors.bg,
+                    color: colors.text,
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    ...style
+                }} title={title}>
+                    {children}
+                </span>
+            );
+        };
 
         const ScrollArea = ({ children, style = {} }) => (
             <div style={{
@@ -1672,6 +1683,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
             }]);
             const [inputValue, setInputValue] = useState('');
             const [isLoading, setIsLoading] = useState(false);
+            const [serviceStatus, setServiceStatus] = useState('checking'); // 'online', 'offline', 'checking'
             const messagesEndRef = useRef(null);
             const textareaRef = useRef(null);
             const textareaRef2 = useRef(null);
@@ -1688,6 +1700,40 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
             useEffect(() => {
                 scrollToBottom();
             }, [messages]);
+
+            // Check service health on mount and periodically
+            useEffect(() => {
+                const checkHealth = async () => {
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+                        const response = await fetch('/health', {
+                            method: 'GET',
+                            signal: controller.signal
+                        });
+
+                        clearTimeout(timeoutId);
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            setServiceStatus(data.status === 'ok' ? 'online' : 'offline');
+                        } else {
+                            setServiceStatus('offline');
+                        }
+                    } catch (error) {
+                        setServiceStatus('offline');
+                    }
+                };
+
+                // Check immediately
+                checkHealth();
+
+                // Check every 30 seconds
+                const interval = setInterval(checkHealth, 30000);
+
+                return () => clearInterval(interval);
+            }, []);
 
             // Auto-resize textareas
             const autoResizeTextarea = (textarea) => {
@@ -1736,14 +1782,14 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
                     const timeoutId = setTimeout(() => {
                         controller.abort();
                     }, 45000); // 45 second timeout (matching server timeout)
-                    
+
                     const response = await fetch('/ai-chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ message }),
                         signal: controller.signal
                     });
-                    
+
                     clearTimeout(timeoutId);
 
                     // Remove thinking message
@@ -1762,7 +1808,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
                     }
                 } catch (error) {
                     setMessages(prev => prev.filter(msg => msg.type !== 'thinking'));
-                    
+
                     let errorMessage = error.message;
                     if (error.name === 'AbortError' || error.message.includes('aborted')) {
                         errorMessage = '⏱️ Request timed out after 45 seconds. This can happen with complex questions. Try breaking your question into smaller parts or asking something more specific.';
@@ -1771,7 +1817,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
                     } else if (error.message.includes('timeout')) {
                         errorMessage = '⏱️ The request took too long to process. Try asking a more specific question or try again later.';
                     }
-                    
+
                     addMessage('error', \`❌ Error: \${errorMessage}\`);
                 } finally {
                     setIsLoading(false);
@@ -1918,14 +1964,34 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
                             <Group justify="space-between" align="center">
                                 <div>
                                     <Title order={3} style={{ color: '#c1c2c5', marginBottom: '2px', fontWeight: '600' }}>
-                                        Design Systems Assistant
+                                        ` + (env.ORGANIZATION_NAME || 'Organization') + ` Documentation
                                     </Title>
                                     <Text size="sm" style={{ color: '#909296' }}>
-                                        MCP Server for Design Systems
+                                        ` + (env.ORGANIZATION_SUBTITLE || 'Powered by MCP (Model Context Protocol)') + `
                                     </Text>
                                 </div>
-                                <Badge variant="light" color="green" size="sm">
-                                    Online
+                                <Badge
+                                    variant="light"
+                                    color={serviceStatus === 'online' ? 'green' : serviceStatus === 'checking' ? 'yellow' : 'red'}
+                                    size="sm"
+                                    style={{
+                                        cursor: 'default',
+                                        transition: 'all 0.3s ease',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }}
+                                    title={serviceStatus === 'online' ? 'Service is operational' : serviceStatus === 'checking' ? 'Checking connection...' : 'Service unavailable - check your connection'}
+                                >
+                                    <span style={{
+                                        display: 'inline-block',
+                                        width: '6px',
+                                        height: '6px',
+                                        borderRadius: '50%',
+                                        backgroundColor: serviceStatus === 'online' ? '#51cf66' : serviceStatus === 'checking' ? '#ffd43b' : '#ff6b6b',
+                                        animation: serviceStatus === 'checking' ? 'pulse 2s infinite' : 'none'
+                                    }}></span>
+                                    {serviceStatus === 'online' ? 'Online' : serviceStatus === 'checking' ? 'Checking...' : 'Offline'}
                                 </Badge>
                             </Group>
                         </div>
@@ -1945,10 +2011,26 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
                                         flexDirection: 'column',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        minHeight: 'calc(100vh - 200px)',
+                                        minHeight: 'calc(100vh - 220px)',
                                         textAlign: 'center',
-                                        paddingTop: '60px'
                                     }}>
+                                        {/* Organization Logo (optional) */}
+                                        ${env.ORGANIZATION_LOGO_URL ? `
+                                        <div style={{ marginBottom: '32px' }}>
+                                            <img
+                                                src="` + env.ORGANIZATION_LOGO_URL + `"
+                                                alt="` + (env.ORGANIZATION_NAME || 'Organization') + ` Logo"
+                                                style={{
+                                                    maxHeight: '120px',
+                                                    maxWidth: '300px',
+                                                    height: 'auto',
+                                                    width: 'auto',
+                                                    objectFit: 'contain'
+                                                }}
+                                            />
+                                        </div>
+                                        ` : ''}
+
                                         {/* Elegant centered title */}
                                         <div style={{ marginBottom: '48px' }}>
                                             <Title
@@ -1961,7 +2043,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
                                                     letterSpacing: '-0.02em'
                                                 }}
                                             >
-                                                Design Systems Assistant
+                                                ` + (env.ORGANIZATION_NAME || 'Organization') + ` Documentation
                                             </Title>
                                             <Text
                                                 style={{
@@ -1969,10 +2051,11 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
                                                     fontSize: '18px',
                                                     fontWeight: '400',
                                                     maxWidth: '600px',
-                                                    lineHeight: '1.5'
+                                                    lineHeight: '1.5',
+                                                    margin: '0 auto'
                                                 }}
                                             >
-                                                I'm your specialized design systems assistant. Ask me about components, tokens, patterns, and best practices.
+                                                ` + (env.ORGANIZATION_TAGLINE || "Get instant answers from our comprehensive documentation. Ask about APIs, components, patterns, and best practices.") + `
                                             </Text>
                                         </div>
 
@@ -2253,7 +2336,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
                         marginTop: 'auto'
                     }}>
                         <Text size="sm" style={{ color: '#6c6f75', fontSize: '13px', marginBottom: '8px' }}>
-                            🤖 MCP Server for ${env.ORGANIZATION_NAME || 'Documentation'} • Powered by curated knowledge base
+                            🤖 ` + (env.ORGANIZATION_NAME || 'Organization') + ` Documentation Assistant • Powered by MCP
                         </Text>
                         <Text size="sm" style={{ color: '#6c6f75', fontSize: '13px' }}>
                             Made with ❤️ by{' '}
@@ -2301,6 +2384,15 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
             30% {
                 transform: scale(1.2);
                 opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
             }
         }
 

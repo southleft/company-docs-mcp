@@ -5,7 +5,6 @@
 	"private": false,
 	"type": "module",
 	"scripts": {
-		"setup": "tsx scripts/setup.ts",
 		"deploy": "wrangler deploy",
 		"dev": "wrangler dev",
 		"format": "biome format --write",
@@ -19,11 +18,12 @@
 		"ingest:url": "tsx scripts/ingest/ingest.ts url",
 		"ingest:markdown": "tsx scripts/ingest/ingest-markdown.ts --",
 		"ingest:web": "tsx scripts/ingest/crawl-website.ts --",
-		"ingest:supabase": "tsx scripts/ingest/ingest-supabase.ts",
-		"slack:setup": "tsx scripts/slack-setup.ts",
+		"ingest:supabase": "tsx scripts/ingest/to-supabase.ts",
+		"test:local": "tsx scripts/test-local.ts",
+		"setup": "node scripts/setup.js",
+		"test:connection": "tsx scripts/test-connection.ts",
 		"slack:start": "tsx src/slack-bot/index.ts",
 		"slack:deploy": "tsx scripts/deploy-slack.ts",
-		"test:local": "tsx scripts/test-local.ts",
 		"db:setup": "tsx scripts/setup-database.ts",
 		"db:setup:sql": "tsx scripts/setup-database.ts --sql-only",
 		"db:migrate": "tsx scripts/migrate-database.ts"

@@ -1,6 +1,10 @@
 # Company Docs MCP
 
-A self-hosted MCP (Model Context Protocol) server that makes your organization's documentation accessible through AI assistants like Claude Desktop. Includes optional Slack bot integration for team-wide access.
+🚀 **[Get Started in 15 Minutes →](./QUICKSTART.md)**
+
+Transform your organization's documentation into an AI-powered knowledge base. Connect it to Claude Desktop, Slack, or use the built-in chat interface.
+
+![Chat Interface](./docs/assets/chat-ui-preview.png)
 
 ## Features
 
@@ -8,6 +12,7 @@ A self-hosted MCP (Model Context Protocol) server that makes your organization's
 - 📚 **Multiple Content Sources**: Ingest from Markdown files, websites, PDFs, CSV files with URLs
 - 🤖 **Claude Desktop Integration**: Connect your docs directly to Claude Desktop via MCP
 - 💬 **Slack Bot** (Optional): Team members can query documentation via Slack slash commands
+- 🎨 **Customizable Branding**: Add your logo and customize the chat interface with your organization's branding
 - ☁️ **Flexible Deployment**: Deploy to Cloudflare Workers or run locally
 - 🔐 **Private & Secure**: Your documentation stays in your infrastructure
 
@@ -195,6 +200,8 @@ compatibility_date = "2024-01-01"
 
 [vars]
 ORGANIZATION_NAME = "Your Company"
+ORGANIZATION_LOGO_URL = "https://your-company.com/logo.svg"
+ORGANIZATION_TAGLINE = "Your custom documentation assistant"
 
 [[kv_namespaces]]
 binding = "CONTENT_CACHE"
