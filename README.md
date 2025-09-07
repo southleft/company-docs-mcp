@@ -158,14 +158,34 @@ npm run test:local
 
 ### 5. Connect to Claude Desktop
 
-Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+Add to your Claude Desktop configuration:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
+#### For Remote MCP (Recommended - Cloudflare Workers):
+```json
+{
+  "mcpServers": {
+    "company-docs": {
+      "url": "https://company-docs-mcp.your-subdomain.workers.dev/mcp"
+    }
+  }
+}
+```
+
+**Important:** 
+- Use `"url"` (not `"command"`) for remote servers
+- The URL must end with `/mcp`
+- Get your worker URL from `npm run deploy` output
+
+#### For Local MCP (Development only):
 ```json
 {
   "mcpServers": {
     "company-docs": {
       "command": "node",
-      "args": ["/path/to/company-docs-mcp/dist/index.js"],
+      "args": ["/absolute/path/to/company-docs-mcp/dist/index.js"],
       "env": {
         "SUPABASE_URL": "your-supabase-url",
         "SUPABASE_ANON_KEY": "your-anon-key"
@@ -175,17 +195,10 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 }
 ```
 
-Or if deployed to Cloudflare:
-
-```json
-{
-  "mcpServers": {
-    "company-docs": {
-      "url": "https://your-worker.workers.dev/mcp"
-    }
-  }
-}
-```
+After updating configuration:
+1. Completely quit Claude Desktop
+2. Restart Claude Desktop
+3. Look for "company-docs" in available MCPs
 
 ## Deployment
 
