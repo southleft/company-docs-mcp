@@ -819,7 +819,8 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 		const corsHeaders = {
 			"Access-Control-Allow-Origin": "*",
 			"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-			"Access-Control-Allow-Headers": "Content-Type",
+			"Access-Control-Allow-Headers": "Content-Type, Accept",
+			"Access-Control-Expose-Headers": "Content-Type",
 		};
 
 		// Handle OPTIONS request
@@ -832,12 +833,37 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 			return new Response("Method not allowed", { status: 405 });
 		}
 
-				const body = await request.json() as any;
+		// Check if client wants SSE format (for remote MCP clients like Claude Desktop)
+		const acceptHeader = request.headers.get('accept') || '';
+		const wantsSSE = acceptHeader.includes('text/event-stream');
+
+		const body = await request.json() as any;
+		
+		// Helper function to format response based on client preference
+		function formatResponse(data: any, isSSE: boolean = wantsSSE): Response {
+			if (isSSE) {
+				// Format as Server-Sent Events for remote MCP clients
+				const sseData = `event: message\ndata: ${JSON.stringify(data)}\n\n`;
+				return new Response(sseData, {
+					headers: {
+						...corsHeaders,
+						"Content-Type": "text/event-stream",
+						"Cache-Control": "no-cache",
+						"Connection": "keep-alive"
+					}
+				});
+			} else {
+				// Standard JSON response
+				return new Response(JSON.stringify(data), {
+					headers: { ...corsHeaders, "Content-Type": "application/json" }
+				});
+			}
+		}
 
 		// Handle MCP JSON-RPC request
 		if (body.method === "initialize") {
 			// Handle MCP initialization
-			return new Response(JSON.stringify({
+			return formatResponse({
 				jsonrpc: "2.0",
 				id: body.id,
 				result: {
@@ -852,8 +878,6 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 						version: "1.0.0"
 					}
 				}
-			}), {
-				headers: { ...corsHeaders, "Content-Type": "application/json" }
 			});
 		}
 
@@ -864,12 +888,10 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 
 		if (body.method === "ping") {
 			// Handle ping requests
-			return new Response(JSON.stringify({
+			return formatResponse({
 				jsonrpc: "2.0",
 				id: body.id,
 				result: {}
-			}), {
-				headers: { ...corsHeaders, "Content-Type": "application/json" }
 			});
 		}
 
@@ -950,12 +972,10 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 				}
 			];
 
-			return new Response(JSON.stringify({
+			return formatResponse({
 				jsonrpc: "2.0",
 				id: body.id,
 				result: { tools }
-			}), {
-				headers: { ...corsHeaders, "Content-Type": "application/json" }
 			});
 		}
 
@@ -1103,38 +1123,30 @@ ${tagList}`
 					break;
 
 				default:
-					return new Response(JSON.stringify({
+					return formatResponse({
 						jsonrpc: "2.0",
 						id: body.id,
 						error: {
 							code: -32601,
 							message: `Method not found: ${toolName}`
 						}
-					}), {
-						status: 400,
-						headers: { ...corsHeaders, "Content-Type": "application/json" }
 					});
 			}
 
-			return new Response(JSON.stringify({
+			return formatResponse({
 				jsonrpc: "2.0",
 				id: body.id,
 				result
-			}), {
-				headers: { ...corsHeaders, "Content-Type": "application/json" }
 			});
 		}
 
-		return new Response(JSON.stringify({
+		return formatResponse({
 			jsonrpc: "2.0",
 			id: body.id,
 			error: {
 				code: -32600,
 				message: "Invalid Request"
 			}
-		}), {
-			status: 400,
-			headers: { ...corsHeaders, "Content-Type": "application/json" }
 		});
 
 	} catch (error: any) {

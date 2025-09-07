@@ -5,7 +5,7 @@ A self-hosted MCP (Model Context Protocol) server that makes your organization's
 ## Features
 
 - 🔍 **Semantic Search**: Vector-based search using OpenAI embeddings for intelligent documentation retrieval
-- 📚 **Multiple Content Sources**: Ingest from Markdown files, websites, PDFs, GitHub repos, and more
+- 📚 **Multiple Content Sources**: Ingest from Markdown files, websites, PDFs, CSV files with URLs
 - 🤖 **Claude Desktop Integration**: Connect your docs directly to Claude Desktop via MCP
 - 💬 **Slack Bot** (Optional): Team members can query documentation via Slack slash commands
 - ☁️ **Flexible Deployment**: Deploy to Cloudflare Workers or run locally
@@ -63,33 +63,83 @@ npm run db:setup
 
 ### 3. Ingest Your Documentation
 
-Choose one or more ingestion methods:
+**Important:** Content ingestion is a 2-step process:
+1. **Step 1:** Ingest content from various sources (creates JSON files locally)
+2. **Step 2:** Upload to Supabase with vector embeddings
 
-#### From Local Markdown Files
+#### Step 1: Ingest Content (Choose one or more methods)
+
+##### From Local Markdown Files
 ```bash
 npm run ingest:markdown -- --dir=./docs
 ```
 
-#### From GitHub Repository
-```bash
-npm run ingest:github -- --repo=your-org/documentation
-```
-
-#### From Website
+##### From Website (Crawls entire site)
 ```bash
 npm run ingest:web -- --url=https://docs.yourcompany.com
+# Options: --max-depth 3 --max-pages 100 --delay 1000
 ```
 
-#### From PDFs
+##### From CSV File with URLs
 ```bash
-npm run ingest:pdf -- --file=./documentation.pdf
+npm run ingest:csv -- urls.csv
+# Create a sample CSV: npm run ingest:csv -- --sample
 ```
 
-#### Generate Vector Embeddings
-After ingesting content, generate embeddings for semantic search:
+##### From Single URL
+```bash
+npm run ingest:url https://example.com/page
+```
+
+##### From PDFs
+```bash
+npm run ingest:pdf ./documentation.pdf
+```
+
+All ingestion commands create JSON files in `content/entries/`.
+
+#### Step 2: Upload to Supabase with Vector Embeddings
+After ingesting content, upload everything to Supabase:
 ```bash
 npm run ingest:supabase
 ```
+
+**Note:** This command:
+- Reads all JSON files from `content/entries/`
+- Generates OpenAI embeddings for each document
+- **Clears existing Supabase data** before uploading
+- Uploads content with vector embeddings for semantic search
+
+### Tips for Common Use Cases
+
+#### Ingesting from GitHub Repository
+While there's no direct GitHub ingestion, you can:
+```bash
+# Option 1: Clone and ingest locally
+git clone https://github.com/your-org/docs.git temp-docs
+npm run ingest:markdown -- --dir=./temp-docs
+rm -rf temp-docs
+
+# Option 2: If the repo has GitHub Pages
+npm run ingest:web -- --url=https://your-org.github.io/docs
+```
+
+#### Combining Multiple Sources
+```bash
+# Ingest from multiple sources before uploading
+npm run ingest:markdown -- --dir=./internal-docs
+npm run ingest:csv -- external-resources.csv
+npm run ingest:web -- --url=https://docs.example.com
+
+# Then upload everything at once
+npm run ingest:supabase
+```
+
+#### Incremental Updates
+**Warning:** `ingest:supabase` clears all existing data. To preserve existing content:
+1. Keep your JSON files in `content/entries/` as a backup
+2. Add new content via ingestion commands
+3. Run `ingest:supabase` to re-upload everything
 
 ### 4. Test Locally
 
