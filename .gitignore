@@ -38,7 +38,6 @@ coverage/
 .nyc_output/
 
 # Cloudflare
-wrangler.toml
 .dev.vars
 
 # Content (organization-specific)

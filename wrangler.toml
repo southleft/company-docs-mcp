@@ -1,0 +1,21 @@
+name = "company-docs-mcp"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ORGANIZATION_NAME = "Your Organization"
+ORGANIZATION_DOMAIN = "example.com"
+ORGANIZATION_LOGO_URL = ""
+ORGANIZATION_TAGLINE = "Get instant answers from your documentation."
+SUPABASE_URL = "https://dflbcieneduppihytwkr.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbGJjaWVuZWR1cHBpaHl0d2tyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcwODMzNjQsImV4cCI6MjA3MjY1OTM2NH0.gHkERJlkKTMxnZupYmbq1-EQvRE9uCR8ctt5MEDIkUk"
+VECTOR_SEARCH_ENABLED = "true"
+VECTOR_SEARCH_MODE = "vector"
+
+[[kv_namespaces]]
+binding = "CONTENT_CACHE"
+id = "2219dc411dc54d00ad116d1ff96250ca"
+
+[ai]
+binding = "AI"
