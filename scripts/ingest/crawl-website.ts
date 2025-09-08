@@ -19,7 +19,7 @@ function showHelp() {
   console.log(`
 🕷️ Website Crawler Tool
 
-Usage: npm run crawl:website <url> [options]
+Usage: npm run ingest:web -- <url> [options]
 
 Arguments:
   url                   Starting URL to crawl from
@@ -33,54 +33,54 @@ Options:
   --include <pattern>  Include URLs matching this regex pattern (can be used multiple times)
   --exclude <pattern>  Exclude URLs matching this regex pattern (can be used multiple times)
   --output-dir <dir>   Output directory for content files (default: content/entries)
-  --no-robots         Ignore robots.txt
-  --no-progress       Don't save progress for resuming
-  --resume            Resume a previous crawl from the same URL
-  --clear             Clear previous crawl progress before starting
-  --report            Generate a crawl report after completion
-  --timeout <ms>      Request timeout in milliseconds (default: 30000)
-  --chunk-size <n>    Chunk size for content processing (default: 1000)
-  --overlap-size <n>  Overlap size between chunks (default: 100)
+  --no-robots          Ignore robots.txt
+  --no-progress        Don't save progress for resuming
+  --resume             Resume a previous crawl from the same URL
+  --clear              Clear previous crawl progress before starting
+  --report             Generate a crawl report after completion
+  --timeout <ms>       Request timeout in milliseconds (default: 30000)
+  --chunk-size <n>     Chunk size for content processing (default: 1000)
+  --overlap-size <n>   Overlap size between chunks (default: 100)
 
 Examples:
   # Basic crawl of a website
-  npm run crawl:website https://material.io/design
+  npm run ingest:web -- https://material.io/design
 
   # Crawl with custom depth and page limit
-  npm run crawl:website https://polaris.shopify.com --max-depth 5 --max-pages 200
+  npm run ingest:web -- https://polaris.shopify.com --max-depth 5 --max-pages 200
 
   # Crawl only specific sections
-  npm run crawl:website https://primer.style --include "/components/" --include "/foundations/"
+  npm run ingest:web -- https://primer.style --include "/components/" --include "/foundations/"
 
   # Exclude certain paths
-  npm run crawl:website https://ant.design --exclude "/changelog" --exclude "/blog"
+  npm run ingest:web -- https://ant.design --exclude "/changelog" --exclude "/blog"
 
   # Fast crawl with no delay
-  npm run crawl:website https://chakra-ui.com --delay 0 --max-pages 50
+  npm run ingest:web -- https://chakra-ui.com --delay 0 --max-pages 50
 
   # Resume a previous crawl
-  npm run crawl:website https://material.io/design --resume
+  npm run ingest:web -- https://material.io/design --resume
 
   # Generate a report after crawling
-  npm run crawl:website https://carbon.ibm.com --report
+  npm run ingest:web -- https://carbon.ibm.com --report
 
 Advanced Usage:
   # Crawl multiple related domains
-  npm run crawl:website https://docs.example.com --follow-external --include "example\\.com"
+  npm run ingest:web -- https://docs.example.com --follow-external --include "example\\.com"
 
   # Deep crawl with high limits
-  npm run crawl:website https://design-system.com --max-depth 10 --max-pages 1000 --delay 500
+  npm run ingest:web -- https://design-system.com --max-depth 10 --max-pages 1000 --delay 500
 
   # Crawl and organize by site sections
-  npm run crawl:website https://site.com --include "/components/" --output-dir content/entries/components
-  npm run crawl:website https://site.com --include "/tokens/" --output-dir content/entries/tokens
+  npm run ingest:web -- https://site.com --include "/components/" --output-dir content/entries/components
+  npm run ingest:web -- https://site.com --include "/tokens/" --output-dir content/entries/tokens
 
 Progress Management:
   The crawler automatically saves progress every 10 pages and can resume if interrupted.
   Progress is saved to: <output-dir>/.crawl-progress.json
 
-  To resume a crawl:     npm run crawl:website <same-url> --resume
-  To start fresh:        npm run crawl:website <url> --clear
+  To resume a crawl:     npm run ingest:web -- <same-url> --resume
+  To start fresh:        npm run ingest:web -- <url> --clear
 
 Notes:
   - The crawler respects robots.txt by default
@@ -92,15 +92,15 @@ Notes:
 
 function parseArgs(): { url?: string; options: CLIOptions } {
   let args = process.argv.slice(2);
-  
+
   // Check if npm has stripped the flags (when args don't contain '--' prefixes except first arg)
   const hasFlags = args.some(arg => arg.startsWith('--') && arg !== '--');
-  
+
   if (!hasFlags && args.length > 1) {
     // NPM has stripped the flags, we need to reconstruct them
     // Expected order: url, max-depth value, max-pages value, exclude values...
     console.log('Debug: NPM stripped flags, reconstructing from positional args:', args);
-    
+
     // For now, we'll require users to use the -- separator
     console.error('\n⚠️  Please use "--" after the command to preserve argument flags:');
     console.error('    npm run crawl:website -- <url> [options]');
@@ -108,12 +108,12 @@ function parseArgs(): { url?: string; options: CLIOptions } {
     console.error('    npm run crawl:website -- https://designsystems.surf --max-depth 4 --max-pages 200 --exclude "/advertisement"\n');
     process.exit(1);
   }
-  
+
   // Remove the '--' separator if present (added by npm script)
   if (args[0] === '--') {
     args = args.slice(1);
   }
-  
+
   const options: CLIOptions = {
     includePatterns: [],
     excludePatterns: []
@@ -211,7 +211,7 @@ async function main() {
   console.log(`📁 Output: ${options.outputDir || 'content/entries'}/`);
 
   // Show options
-  if (options.maxDepth !== undefined || options.maxPages !== undefined || 
+  if (options.maxDepth !== undefined || options.maxPages !== undefined ||
       options.includePatterns?.length || options.excludePatterns?.length) {
     console.log(`\n⚙️ Options:`);
     if (options.maxDepth !== undefined) console.log(`   - Max depth: ${options.maxDepth}`);

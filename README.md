@@ -163,23 +163,50 @@ Add to your Claude Desktop configuration:
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 - **Linux**: `~/.config/Claude/claude_desktop_config.json`
 
-#### For Remote MCP (Recommended - Cloudflare Workers):
+**Important:** Claude Desktop does NOT support remote MCP servers directly via a "url" property. You need to use a local bridge process to connect to your remote server.
+
+#### Option A: Using mcp-remote Package (Recommended)
 ```json
 {
   "mcpServers": {
-    "company-docs": {
-      "url": "https://company-docs-mcp.your-subdomain.workers.dev/mcp"
+    "Company Docs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@latest",
+        "https://company-docs-mcp.your-subdomain.workers.dev/mcp"
+      ]
     }
   }
 }
 ```
 
-**Important:** 
-- Use `"url"` (not `"command"`) for remote servers
-- The URL must end with `/mcp`
-- Get your worker URL from `npm run deploy` output
+Replace `your-subdomain` with your actual Cloudflare Workers subdomain from `npm run deploy` output.
 
-#### For Local MCP (Development only):
+#### Option B: Using Standalone Client (Most Reliable)
+1. Download the standalone client:
+```bash
+# Copy from the repository
+cp standalone-mcp-client.cjs /path/to/your/preferred/location/
+# Edit the file to update the MCP_SERVER_URL to your deployed URL
+```
+
+2. Add to Claude Desktop config:
+```json
+{
+  "mcpServers": {
+    "Company Docs": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/standalone-mcp-client.cjs"
+      ]
+    }
+  }
+}
+```
+
+#### Option C: Local Development Mode
+For local development only (requires `npm run dev` to be running):
 ```json
 {
   "mcpServers": {
@@ -198,7 +225,7 @@ Add to your Claude Desktop configuration:
 After updating configuration:
 1. Completely quit Claude Desktop
 2. Restart Claude Desktop
-3. Look for "company-docs" in available MCPs
+3. Look for "Company Docs" in available MCPs
 
 ## Deployment
 
@@ -368,6 +395,14 @@ const SEARCH_CONFIG = {
 - Verify bot tokens and permissions
 - Check if bot is added to the channel
 - Review Cloudflare Workers logs if deployed
+
+**Claude Desktop not connecting**
+- Ensure you're not using the "url" property (not supported)
+- Use mcp-remote package or standalone client as shown above
+- Completely restart Claude Desktop after updating config
+- Check that your deployed server is accessible
+
+For detailed troubleshooting, see [docs/TROUBLESHOOTING-MCP-FIXED.md](docs/TROUBLESHOOTING-MCP-FIXED.md)
 
 ## Security Considerations
 

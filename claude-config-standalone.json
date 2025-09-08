@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "Company Docs": {
+      "command": "node",
+      "args": [
+        "/Users/tjpitre/Sites/company-docs-mcp/standalone-mcp-client.cjs"
+      ]
+    }
+  }
+}

@@ -18,7 +18,7 @@
 		"ingest:url": "tsx scripts/ingest/ingest.ts url",
 		"ingest:markdown": "tsx scripts/ingest/ingest-markdown.ts --",
 		"ingest:web": "tsx scripts/ingest/crawl-website.ts --",
-		"ingest:supabase": "tsx scripts/ingest/to-supabase.ts",
+		"ingest:supabase": "tsx scripts/ingest/ingest-supabase.ts",
 		"test:local": "tsx scripts/test-local.ts",
 		"setup": "node scripts/setup.js",
 		"test:connection": "tsx scripts/test-connection.ts",

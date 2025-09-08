@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "Company Docs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@latest",
+        "https://company-docs-mcp.your-subdomain.workers.dev/mcp"
+      ]
+    }
+  }
+}

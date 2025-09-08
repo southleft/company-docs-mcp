@@ -82,7 +82,7 @@ npm run ingest:markdown -- --dir=./path/to/your/docs
 ### Option B: Website
 To scrape documentation from a website:
 ```bash
-npm run ingest:web -- --url=https://docs.yourcompany.com
+npm run ingest:web -- https://docs.yourcompany.com
 ```
 
 ### Option C: GitHub Repository
@@ -115,9 +115,54 @@ Try asking questions like:
 
 ## Step 6: Connect to Claude Desktop
 
-### For Local Development
+**Important:** Claude Desktop does NOT support remote MCP servers directly via a "url" property. You need to use a local bridge process.
+
+### Option A: Using mcp-remote Package (Recommended)
 
 Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+
+```json
+{
+  "mcpServers": {
+    "Company Docs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@latest",
+        "https://company-docs-mcp.your-subdomain.workers.dev/mcp"
+      ]
+    }
+  }
+}
+```
+
+**Note:** Replace `your-subdomain` with your actual Cloudflare Workers subdomain from `npm run deploy` output.
+
+### Option B: Using Standalone Client (Most Reliable)
+
+1. Copy the standalone client:
+```bash
+cp standalone-mcp-client.cjs /path/to/your/preferred/location/
+# Edit the file to update the MCP_SERVER_URL to your deployed URL
+```
+
+2. Add to Claude Desktop config:
+```json
+{
+  "mcpServers": {
+    "Company Docs": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/standalone-mcp-client.cjs"
+      ]
+    }
+  }
+}
+```
+
+### Option C: Local Development Mode
+
+For local development only (requires `npm run dev` to be running):
 
 ```json
 {
@@ -135,27 +180,18 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 }
 ```
 
-### For Cloudflare Deployment
+**Restart Claude Desktop** to load the MCP server.
+
+## Step 7: Deploy to Cloudflare (Optional)
 
 First deploy to Cloudflare:
 ```bash
 npm run deploy
 ```
 
-Then add to Claude Desktop config:
-```json
-{
-  "mcpServers": {
-    "company-docs": {
-      "url": "https://your-worker.workers.dev/mcp"
-    }
-  }
-}
-```
+Your MCP server will be available at: `https://company-docs-mcp.<your-subdomain>.workers.dev`
 
-**Restart Claude Desktop** to load the MCP server.
-
-## Step 7: Set Up Slack Bot (Optional, 5 minutes)
+## Step 8: Set Up Slack Bot (Optional, 5 minutes)
 
 ### Create Slack App
 
@@ -231,9 +267,10 @@ Your documentation assistant is now available through:
 - Ensure all Slack tokens are correctly set in `.env`
 
 ### Claude Desktop not connecting
-- Restart Claude Desktop after updating config
-- Check the path to `index.js` is absolute
-- Verify the MCP server is running (`npm run dev`)
+- Ensure you're not using the "url" property (not supported)
+- Use mcp-remote package or standalone client as shown above
+- Completely restart Claude Desktop after updating config
+- Verify your deployed server is accessible
 
 ## Next Steps
 
