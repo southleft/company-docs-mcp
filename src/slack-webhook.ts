@@ -114,12 +114,16 @@ export async function handleSlackCommand(request: Request, env: any): Promise<Re
 }
 
 async function searchAndRespond(command: SlackSlashCommand, env: any) {
+  console.log('[Slack] searchAndRespond started for query:', command.text);
   try {
     // Use the same AI-powered search as the chat UI
     const apiKey = env?.OPENAI_API_KEY;
     const model = env?.OPENAI_MODEL || "gpt-4o";
     
+    console.log('[Slack] Using model:', model);
+    
     if (!apiKey) {
+      console.error('[Slack] No OpenAI API key configured');
       throw new Error("OpenAI API key not configured");
     }
 
@@ -131,6 +135,7 @@ async function searchAndRespond(command: SlackSlashCommand, env: any) {
     });
 
     // First, search the documentation using vector search (same as chat UI)
+    console.log('[Slack] Starting searchWithSupabase...');
     const searchResults = await withTimeout(
       searchWithSupabase({
         query: command.text,
@@ -140,6 +145,7 @@ async function searchAndRespond(command: SlackSlashCommand, env: any) {
       'Slack search'
     );
 
+    console.log('[Slack] Search returned', searchResults.length, 'results');
     let responseText = '';
 
     if (searchResults.length === 0) {
@@ -176,6 +182,7 @@ RESPONSE FORMAT - EXTREMELY IMPORTANT:
 NEVER SHORTEN OR SUMMARIZE - users explicitly want COMPLETE, DETAILED, EXHAUSTIVE answers in Slack.`;
 
       // Get AI response
+      console.log('[Slack] Calling OpenAI with', formattedResults.length, 'formatted results...');
       try {
         const completion = await withTimeout(
           openai.chat.completions.create({
@@ -198,6 +205,7 @@ NEVER SHORTEN OR SUMMARIZE - users explicitly want COMPLETE, DETAILED, EXHAUSTIV
         );
 
         responseText = completion.choices[0].message.content || 'Unable to generate response.';
+        console.log('[Slack] OpenAI response length:', responseText.length, 'characters');
       } catch (aiError: any) {
         console.error('AI Error:', aiError);
         // Fallback to showing raw search results if AI fails
