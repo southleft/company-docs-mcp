@@ -3,6 +3,10 @@
 .env.local
 .env.production
 
+# Local configuration (for personal testing)
+wrangler.toml.local
+*.local
+
 # Dependencies
 node_modules/
 package-lock.json
@@ -41,6 +45,12 @@ wrangler.toml
 content/**/*
 !content/.gitkeep
 !examples/
+
+# Organization-specific documentation
+docs/*canvas*
+docs/*workday*
+*CanvasKit*
+*canvas-kit*
 
 # Database
 *.db

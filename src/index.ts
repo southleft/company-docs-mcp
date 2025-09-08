@@ -117,7 +117,7 @@ This is a rare occurrence on the paid tier - please retry your request.`;
 }
 
 // AI System Prompt - will be initialized with env variables
-let AI_SYSTEM_PROMPT = `You are a Workday CanvasKit documentation assistant.
+let AI_SYSTEM_PROMPT = `You are a documentation assistant.
 
 MANDATORY SEARCH REQUIREMENT:
 You MUST call the search_design_knowledge function for EVERY single user question - no exceptions.
@@ -140,7 +140,7 @@ RESPONSE FORMAT:
 - Cite source documents naturally in your response
 - Aim for thorough, complete responses that fully address the user's question
 
-If search returns no results, simply state that the information is not available in the CanvasKit documentation.`;
+If search returns no results, simply state that the information is not available in the documentation.`;
 
 // Available MCP tools for the AI
 const MCP_TOOLS = [
@@ -502,7 +502,7 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 			
 			// Parse the search result and format a proper response
 			if (searchResult && searchResult !== 'No results found.') {
-				const formattedResponse = `Based on the CanvasKit documentation:\n\n${searchResult}`;
+				const formattedResponse = `Based on the documentation:\n\n${searchResult}`;
 				return new Response(JSON.stringify({
 					response: formattedResponse
 				}), {
@@ -510,7 +510,7 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 				});
 			} else {
 				return new Response(JSON.stringify({
-					response: 'I could not find specific information about that topic in the CanvasKit documentation. Please try rephrasing your question or ask about components, tokens, theming, or other CanvasKit features.'
+					response: 'I could not find specific information about that topic in the documentation. Please try rephrasing your question or ask about components, tokens, theming, or other design system features.'
 				}), {
 					headers: { ...corsHeaders, "Content-Type": "application/json" }
 				});

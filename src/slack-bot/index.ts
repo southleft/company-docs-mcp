@@ -317,7 +317,7 @@ Important: DO NOT include a "Sources" section or numeric footnotes like (1), (2)
     const blocks: any[] = [
       {
         type: 'header',
-        text: { type: 'plain_text', text: '📚 CanvasKit Documentation' }
+        text: { type: 'plain_text', text: '📚 Documentation' }
       },
       {
         type: 'context',

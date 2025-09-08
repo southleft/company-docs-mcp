@@ -4,6 +4,8 @@
 
 Transform your organization's documentation into an AI-powered knowledge base. Connect it to Claude Desktop, Slack, or use the built-in chat interface.
 
+> **Latest Updates**: Enhanced Slack integration with comprehensive responses and clickable source links. Now supports dual-environment setup for testing with organization-specific content while maintaining a generic public repository.
+
 ![Chat Interface](./docs/assets/chat-ui-preview.png)
 
 ## Features
@@ -45,6 +47,8 @@ The setup wizard will guide you through:
 - Testing your Supabase connection
 - Configuring content sources
 - (Optional) Setting up Slack integration
+
+**For Organization-Specific Testing**: See [LOCAL_SETUP.md](LOCAL_SETUP.md) for instructions on setting up a dual-environment configuration that allows testing with your organization's branding while keeping the repository generic.
 
 ### 2. Configure Supabase Database
 
@@ -241,24 +245,46 @@ After updating configuration:
 name = "company-docs-mcp"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ORGANIZATION_NAME = "Your Company"
+ORGANIZATION_DOMAIN = "yourcompany.com"
 ORGANIZATION_LOGO_URL = "https://your-company.com/logo.svg"
+ORGANIZATION_SUBTITLE = "Documentation Assistant"
 ORGANIZATION_TAGLINE = "Your custom documentation assistant"
+VECTOR_SEARCH_ENABLED = "true"
+VECTOR_SEARCH_MODE = "vector"
 
 [[kv_namespaces]]
 binding = "CONTENT_CACHE"
 id = "your-kv-namespace-id"
+
+[ai]
+binding = "AI"
 ```
 
-2. Deploy:
+2. Set secrets:
+
+```bash
+# Set your OpenAI API key and model
+echo "your-openai-api-key" | npx wrangler secret put OPENAI_API_KEY
+echo "gpt-4o" | npx wrangler secret put OPENAI_MODEL
+
+# Set Supabase credentials
+echo "your-supabase-url" | npx wrangler secret put SUPABASE_URL
+echo "your-anon-key" | npx wrangler secret put SUPABASE_ANON_KEY
+```
+
+3. Deploy:
 
 ```bash
 npm run deploy
 ```
 
 Your MCP server will be available at: `https://company-docs-mcp.<your-subdomain>.workers.dev`
+
+**For local testing with organization branding**: Use `npm run deploy:local` with your `wrangler.toml.local` configuration.
 
 ### Self-Host with Docker
 

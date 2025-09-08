@@ -6,10 +6,13 @@
 	"type": "module",
 	"scripts": {
 		"deploy": "wrangler deploy",
+		"deploy:local": "wrangler deploy -c wrangler.toml.local",
 		"dev": "wrangler dev",
+		"dev:local": "wrangler dev -c wrangler.toml.local --env-file .env.local",
 		"format": "biome format --write",
 		"lint:fix": "biome lint --fix",
 		"start": "wrangler dev",
+		"start:local": "wrangler dev -c wrangler.toml.local --env-file .env.local",
 		"cf-typegen": "wrangler types",
 		"type-check": "tsc --noEmit",
 		"ingest": "tsx scripts/ingest/ingest.ts",

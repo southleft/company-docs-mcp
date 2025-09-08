@@ -87,7 +87,7 @@ export async function handleSlackCommand(request: Request, env: any, ctx?: any):
             type: 'mrkdwn',
             text: `*How to use ${command.command}:*\n\n` +
                   `• \`${command.command} tokens\` - Learn about design tokens\n` +
-                  `• \`${command.command} theming\` - Understand theming in Canvas Kit\n` +
+                  `• \`${command.command} theming\` - Understand theming in your design system\n` +
                   `• \`${command.command} components\` - Explore available components`
           }
         }
@@ -128,6 +128,8 @@ async function searchAndRespond(command: SlackSlashCommand, env: any) {
     const model = env?.OPENAI_MODEL || "gpt-4o";
     
     console.log('[Slack] Using model:', model);
+    console.log('[Slack] Available env vars:', Object.keys(env || {}).filter(k => k.includes('OPENAI')));
+    console.log('[Slack] Raw OPENAI_MODEL value:', env?.OPENAI_MODEL);
     
     if (!apiKey) {
       console.error('[Slack] No OpenAI API key configured');
@@ -169,24 +171,54 @@ ${entry.content.slice(0, 10000)}${entry.content.length > 10000 ? "..." : ""}
 ---`
       ).join("\n\n");
 
-      // Create the AI prompt - More explicit about comprehensive responses for Slack
-      const systemPrompt = `You are a Workday CanvasKit documentation assistant responding in Slack.
-      
-RESPONSE FORMAT - EXTREMELY IMPORTANT:
-- You MUST provide EXHAUSTIVE, COMPREHENSIVE responses that include EVERY detail from the search results
-- DO NOT summarize, shorten, or condense information - include EVERYTHING relevant
-- Include ALL code examples, ALL implementation details, ALL guidelines, ALL best practices
-- When you find multiple relevant sections, include information from EVERY SINGLE ONE
-- List out ALL tokens, ALL utilities, ALL props, ALL methods mentioned in the documentation
-- Provide step-by-step implementations when available
-- Include ALL sources and references found
-- Your response should be LONG and DETAILED - users want complete expertise, not summaries
-- Minimum response should be several paragraphs with bullet points, code examples, and thorough explanations
-- If the documentation mentions 10 things, include all 10 things - don't pick just a few
-- Format for Slack using markdown (bold with *, code with backticks)
-- Keep responses well-structured with sections and clear organization
+      // Create the AI prompt - AGGRESSIVE comprehensive response requirements
+      const systemPrompt = `You are a ${env.ORGANIZATION_NAME || 'documentation'} assistant responding in Slack.
 
-NEVER SHORTEN OR SUMMARIZE - users explicitly want COMPLETE, DETAILED, EXHAUSTIVE answers in Slack.`;
+CRITICAL MANDATE - YOU MUST GENERATE EXTREMELY LONG, COMPREHENSIVE RESPONSES:
+
+1. **MINIMUM LENGTH REQUIREMENT**: Your response MUST be at least 3000 words for any substantial topic. This is NON-NEGOTIABLE.
+
+2. **EXHAUSTIVE DETAIL MANDATE**:
+   - Include EVERY SINGLE piece of information from the documentation
+   - Provide ALL code examples found in the documentation - do not skip ANY
+   - List EVERY token, EVERY utility, EVERY prop, EVERY method mentioned
+   - Include ALL implementation patterns, ALL use cases, ALL variations
+   - Provide complete, runnable code examples for EACH concept
+   - Include ALL edge cases, ALL considerations, ALL best practices
+
+3. **COMPREHENSIVE STRUCTURE**:
+   - Start with a detailed overview (500+ words)
+   - Include multiple main sections with extensive subsections
+   - Provide in-depth explanations for each concept (200+ words per concept)
+   - Include complete code implementations (not snippets)
+   - Add detailed examples for every single use case
+   - Include troubleshooting sections
+   - Provide migration guides if applicable
+   - Include performance considerations
+   - Add accessibility guidelines
+   - Include testing strategies
+   - ALWAYS end with a "Sources" section listing the documentation titles you referenced
+
+4. **NO SUMMARIZATION ALLOWED**:
+   - NEVER use phrases like "in summary" or "briefly"
+   - NEVER skip content with "etc." or "and more"
+   - NEVER abbreviate explanations
+   - ALWAYS expand on every point mentioned
+   - ALWAYS include full context for every statement
+
+5. **CODE EXAMPLE REQUIREMENTS**:
+   - Every code example must be COMPLETE and RUNNABLE
+   - Include all imports, all setup, all configuration
+   - Show multiple variations of each implementation
+   - Include both TypeScript and JavaScript versions when applicable
+   - Add detailed comments explaining every line
+
+6. **RESPONSE LENGTH VERIFICATION**:
+   - If your response is less than 3000 words, you have FAILED
+   - Aim for 5000-10000 words for comprehensive topics
+   - Use the FULL context provided to generate extensive content
+
+REMEMBER: The user has EXPLICITLY requested comprehensive, professional-grade documentation. They want to see EVERYTHING the documentation has to offer on this topic. DO NOT HOLD BACK. GENERATE THE LONGEST, MOST DETAILED RESPONSE POSSIBLE.`;
 
       // Get AI response
       console.log('[Slack] Calling OpenAI with', formattedResults.length, 'formatted results...');
@@ -201,11 +233,19 @@ NEVER SHORTEN OR SUMMARIZE - users explicitly want COMPLETE, DETAILED, EXHAUSTIV
               },
               {
                 role: "user",
-                content: `Based on these search results about "${command.text}", provide a comprehensive answer:\n\n${formattedResults}`
+                content: `Based on these search results about "${command.text}", provide THE MOST COMPREHENSIVE, DETAILED, AND EXHAUSTIVE answer possible.
+
+IMPORTANT: Generate a response that is AT LEAST 3000 words long. Include EVERY piece of information from the documentation below. Do NOT summarize or shorten anything. The user wants to see EVERYTHING about this topic.
+
+Here are the complete documentation sections to include in your response:
+
+${formattedResults}
+
+Remember: Your response MUST be extremely long and detailed. Include ALL information, ALL code examples, ALL implementation details. Aim for 5000-10000 words if the documentation supports it.`
               }
             ],
             max_tokens: 16000,  // Maximum tokens for comprehensive Slack responses
-            temperature: 0.3,
+            temperature: 0.1,  // Lower temperature for more consistent, detailed responses
           }),
           30000,
           'OpenAI completion for Slack'
@@ -213,6 +253,8 @@ NEVER SHORTEN OR SUMMARIZE - users explicitly want COMPLETE, DETAILED, EXHAUSTIV
 
         responseText = completion.choices[0].message.content || 'Unable to generate response.';
         console.log('[Slack] OpenAI response length:', responseText.length, 'characters');
+        console.log('[Slack] OpenAI tokens used:', completion.usage?.total_tokens || 'unknown');
+        console.log('[Slack] Response preview (first 200 chars):', responseText.substring(0, 200));
       } catch (aiError: any) {
         console.error('AI Error:', aiError);
         // Fallback to showing raw search results if AI fails
@@ -232,7 +274,7 @@ NEVER SHORTEN OR SUMMARIZE - users explicitly want COMPLETE, DETAILED, EXHAUSTIV
       type: 'header',
       text: {
         type: 'plain_text',
-        text: '📚 CanvasKit Documentation',
+        text: `📚 ${env.ORGANIZATION_NAME || 'Documentation'}`,
         emoji: true
       }
     });
@@ -251,27 +293,49 @@ NEVER SHORTEN OR SUMMARIZE - users explicitly want COMPLETE, DETAILED, EXHAUSTIV
     blocks.push({ type: 'divider' });
 
     // Split long responses into multiple sections for Slack's block limits
-    const maxSectionLength = 3000;
+    // Slack supports 3000 chars per text block, up to 50 blocks (150K chars total)
+    const maxSectionLength = 2900; // Slightly under 3000 for safety
     const responseParts = [];
-    
+    let totalCharsSent = 0;
+
     if (responseText.length > maxSectionLength) {
-      // Split by paragraphs to avoid breaking in the middle of content
-      const paragraphs = responseText.split('\n\n');
+      // Split by sentences first, then paragraphs for better content preservation
+      const sentences = responseText.split(/(?<=[.!?])\s+/);
       let currentPart = '';
       
-      for (const paragraph of paragraphs) {
-        if ((currentPart + '\n\n' + paragraph).length > maxSectionLength && currentPart) {
-          responseParts.push(currentPart);
-          currentPart = paragraph;
+      for (const sentence of sentences) {
+        const potentialPart = currentPart ? currentPart + ' ' + sentence : sentence;
+        
+        if (potentialPart.length > maxSectionLength && currentPart) {
+          // Only add if we have content
+          if (currentPart.trim()) {
+            responseParts.push(currentPart.trim());
+            totalCharsSent += currentPart.length;
+          }
+          currentPart = sentence;
         } else {
-          currentPart = currentPart ? currentPart + '\n\n' + paragraph : paragraph;
+          currentPart = potentialPart;
+        }
+        
+        // Safety: limit to 45 blocks to stay under Slack's 50 block limit
+        if (responseParts.length >= 45) {
+          if (currentPart.trim()) {
+            responseParts.push(currentPart.trim() + '\n\n...[Response truncated due to Slack limits]');
+          }
+          break;
         }
       }
-      if (currentPart) {
-        responseParts.push(currentPart);
+      
+      // Add the last part if it exists and we haven't hit limits
+      if (currentPart.trim() && responseParts.length < 45) {
+        responseParts.push(currentPart.trim());
+        totalCharsSent += currentPart.length;
       }
+      
+      console.log(`[Slack] Split response: ${responseParts.length} parts, ${totalCharsSent}/${responseText.length} chars sent`);
     } else {
       responseParts.push(responseText);
+      totalCharsSent = responseText.length;
     }
 
     // Add response sections
@@ -288,6 +352,44 @@ NEVER SHORTEN OR SUMMARIZE - users explicitly want COMPLETE, DETAILED, EXHAUSTIV
         blocks.push({ type: 'divider' });
       }
     });
+
+    // Add sources section with clickable links
+    if (searchResults.length > 0) {
+      blocks.push({ type: 'divider' });
+      
+      // Create sources text with clickable links
+      let sourcesText = '*Sources:*\n';
+      const uniqueSources = new Map();
+      
+      // Collect unique sources from search results
+      searchResults.forEach(entry => {
+        const sourceUrl = entry.source?.location || entry.metadata?.source_url;
+        if (sourceUrl && !uniqueSources.has(entry.title)) {
+          uniqueSources.set(entry.title, sourceUrl);
+        }
+      });
+      
+      // Format sources as clickable links (up to 10)
+      let sourceCount = 0;
+      uniqueSources.forEach((url, title) => {
+        if (sourceCount < 10) {
+          // Slack uses <url|text> format for links
+          sourcesText += `• <${url}|${title}>\n`;
+          sourceCount++;
+        }
+      });
+      
+      // If we have sources, add them as a section
+      if (uniqueSources.size > 0) {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: sourcesText
+          }
+        });
+      }
+    }
 
     // Send the follow-up message
     await fetch(command.response_url, {
