@@ -231,6 +231,12 @@ async function callMcpTool(toolName: string, args: any, env?: any): Promise<stri
 				'Design knowledge search'
 			);
 
+			console.log(`[Search Debug] search_documentation called with query: "${args.query}"`);
+			console.log(`[Search Debug] Found ${searchResults.length} results`);
+			if (searchResults.length > 0) {
+				console.log(`[Search Debug] First result title: ${searchResults[0].title}`);
+			}
+
 			if (searchResults.length === 0) {
 				return "No design system knowledge found matching your search criteria.";
 			}
@@ -244,7 +250,7 @@ async function callMcpTool(toolName: string, args: any, env?: any): Promise<stri
 ⭐ Confidence: ${entry.metadata.confidence}
 🔗 Source: [${entry.source?.location || "Link"}](${entry.source?.location || entry.metadata?.source_url || "#"})
 
-${entry.content.slice(0, 1000)}${entry.content.length > 1000 ? "..." : ""}
+${entry.content.slice(0, 5000)}${entry.content.length > 5000 ? "..." : ""}
 
 ---`
 			).join("\n\n");
@@ -452,6 +458,8 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 		}
 
 		let response = completion.choices[0].message;
+		console.log('[AI Debug] Initial response has content:', !!response.content, 'Length:', response.content?.length || 0);
+		console.log('[AI Debug] Initial response content preview:', response.content?.substring(0, 100));
 
 		// Only validate content if there are no tool calls
 		// When OpenAI makes tool calls, response.content is intentionally empty
@@ -533,6 +541,8 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 				);
 
 				response = finalCompletion.choices[0].message;
+				console.log('[AI Debug] Final response content length:', response.content?.length || 0);
+				console.log('[AI Debug] Final response preview:', response.content?.substring(0, 100));
 
 				// Validate final response
 				if (!response || !response.content) {
@@ -629,6 +639,8 @@ function initializeMcpTools(server: any) {
 		limit: z.number().min(1).max(50).default(25).describe("Maximum number of results"),
 	},
 	async ({ query, category, tags, limit }) => {
+		// Note: MCP tools don't have access to env, so they can't use Supabase
+		// This will always use local search
 		const results = await searchEntries({
 			query,
 			category: category as Category | undefined,
@@ -654,7 +666,7 @@ function initializeMcpTools(server: any) {
 <em>⭐ Confidence:</em> ${entry.metadata.confidence}
 <em>🔗 Source:</em> <a href="${entry.source?.location || entry.metadata?.source_url || "#"}" target="_blank">${entry.source?.location || entry.metadata?.source_url || "N/A"}</a>
 
-${entry.content.slice(0, 1000)}${entry.content.length > 1000 ? "..." : ""}
+${entry.content.slice(0, 5000)}${entry.content.length > 5000 ? "..." : ""}
 
 <hr style="border: none; border-top: 1px solid #373a40; margin: 16px 0;">`
 		).join("\n\n");
@@ -990,6 +1002,14 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 
 			switch (toolName) {
 				case "search_design_knowledge":
+					console.log('[Search API] Searching with args:', {
+						query: args.query,
+						category: args.category,
+						tags: args.tags,
+						limit: args.limit || 25,
+						timestamp: new Date().toISOString()
+					});
+					
 					// Add timeout to search operations (12 seconds)
 					const searchResults = await withTimeout(
 						searchEntries({
@@ -1001,6 +1021,12 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 						12000,
 						'Design knowledge search'
 					);
+
+					console.log('[Search API] Search completed:', {
+						resultsFound: searchResults.length,
+						resultTitles: searchResults.slice(0, 3).map(r => r.title),
+						timestamp: new Date().toISOString()
+					});
 
 					if (searchResults.length === 0) {
 						result = {
@@ -1019,7 +1045,7 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 <em>⭐ Confidence:</em> ${entry.metadata.confidence}
 <em>🔗 Source:</em> <a href="${entry.source?.location || entry.metadata?.source_url || "#"}" target="_blank">${entry.source?.location || entry.metadata?.source_url || "N/A"}</a>
 
-${entry.content.slice(0, 1000)}${entry.content.length > 1000 ? "..." : ""}
+${entry.content.slice(0, 5000)}${entry.content.length > 5000 ? "..." : ""}
 
 <hr style="border: none; border-top: 1px solid #373a40; margin: 16px 0;">`
 						).join("\n\n");
@@ -1189,8 +1215,10 @@ ${tagList}`
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-		// Initialize AI_SYSTEM_PROMPT with env variables
-		AI_SYSTEM_PROMPT = `You are a knowledge assistant with access to ${env.ORGANIZATION_NAME || 'organization'} documentation.
+		// DON'T override the good system prompt - the one at line 120 is correct
+		// This was causing the "I'll first perform a detailed search" issue
+		/* COMMENTED OUT - BAD PROMPT THAT CAUSES ISSUES
+		AI_SYSTEM_PROMPT = `You are a ${env.ORGANIZATION_NAME || 'documentation'} assistant.
 
 When you receive a question, search the knowledge base using the available tools and provide a comprehensive, detailed answer. Aim to be thorough and informative - provide rich context, examples, best practices, and implementation details when relevant. Users are looking for in-depth expertise, not brief summaries.
 
@@ -1268,6 +1296,7 @@ FORMATTING GUIDELINES:
 • Cite sources inline naturally: [Source Name](url)
 
 IMPORTANT: Always search thoroughly using multiple query variations before claiming information doesn't exist in the knowledge base.`;
+		*/ // END OF BAD PROMPT - Using the good prompt from line 120 instead
 
 		// Initialize MCP server if not already done
 		if (!server) {
@@ -1792,19 +1821,41 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 
                     clearTimeout(timeoutId);
 
-                    // Remove thinking message
-                    setMessages(prev => prev.filter(msg => msg.type !== 'thinking'));
-
                     if (!response.ok) {
+                        // Remove thinking message before throwing
+                        setMessages(prev => prev.filter(msg => msg.type !== 'thinking'));
                         throw new Error(\`HTTP \${response.status}: \${response.statusText}\`);
                     }
 
                     const data = await response.json();
+                    console.log('[Chat] API Response received:', {
+                        hasError: !!data.error,
+                        hasResponse: !!data.response,
+                        responseLength: data.response?.length || 0,
+                        searchResults: data.searchResults || 0,
+                        timestamp: new Date().toISOString()
+                    });
 
+                    // Remove thinking message and add response in a single state update
                     if (data.error) {
-                        addMessage('error', \`❌ \${data.error}\`);
+                        console.error('API returned error:', data.error);
+                        setMessages(prev => {
+                            const filtered = prev.filter(msg => msg.type !== 'thinking');
+                            return [...filtered, { type: 'error', content: \`❌ \${data.error}\`, id: Date.now() }];
+                        });
+                    } else if (data.response) {
+                        console.log('[Chat] Adding assistant response to UI, length:', data.response.length);
+                        setMessages(prev => {
+                            const filtered = prev.filter(msg => msg.type !== 'thinking');
+                            return [...filtered, { type: 'assistant', content: data.response, id: Date.now() }];
+                        });
+                        setIsLoading(false); // Ensure loading state is cleared
                     } else {
-                        addMessage('assistant', data.response);
+                        console.error('Unexpected response structure:', data);
+                        setMessages(prev => {
+                            const filtered = prev.filter(msg => msg.type !== 'thinking');
+                            return [...filtered, { type: 'error', content: '❌ Invalid response from server - check console for details', id: Date.now() }];
+                        });
                     }
                 } catch (error) {
                     setMessages(prev => prev.filter(msg => msg.type !== 'thinking'));

@@ -16,8 +16,19 @@ export async function searchWithSupabase(options: SearchOptions = {}, env?: any)
   const openaiKey = env?.OPENAI_API_KEY;
   const logPerformance = env?.LOG_SEARCH_PERFORMANCE === 'true';
   
+  // Debug environment variables
+  console.log('[Search Handler] Config:', {
+    vectorEnabled,
+    vectorSearchMode,
+    hasSupabaseUrl: !!supabaseUrl,
+    hasSupabaseKey: !!supabaseKey,
+    hasOpenaiKey: !!openaiKey,
+    query
+  });
+  
   // Check if we should use Supabase vector search
   if (query && vectorEnabled === 'true' && vectorSearchMode === 'vector') {
+    console.log('[Search Handler] Using Supabase vector search');
     try {
       // Try to connect to Supabase
       const { createClient } = require('@supabase/supabase-js');
@@ -29,24 +40,34 @@ export async function searchWithSupabase(options: SearchOptions = {}, env?: any)
         const OpenAI = require('openai');
         const openai = new OpenAI.default({ apiKey: openaiKey });
         
+        console.log('[Search Handler] Generating embedding for query:', query.slice(0, 100));
+        
         const embeddingResponse = await openai.embeddings.create({
           model: 'text-embedding-3-small',
           input: query.slice(0, 8191),
         });
         
         const queryEmbedding = embeddingResponse.data[0].embedding;
+        console.log('[Search Handler] Embedding generated, length:', queryEmbedding.length);
         
         // Search Supabase with vector similarity
         const { data, error } = await supabase.rpc('search_content', {
           query_embedding: queryEmbedding,
           query_text: query, // Hybrid search
-          match_threshold: 0.3,
+          match_threshold: 0.15, // Lowered from 0.3 to get more results
           match_count: limit,
           filter_category: category,
           filter_tags: filterTags
         });
         
+        console.log('[Search Handler] Supabase response:', { 
+          error: error?.message, 
+          dataLength: data?.length || 0,
+          hasData: !!data 
+        });
+        
         if (!error && data && data.length > 0) {
+          console.log('[Search Handler] Returning Supabase results');
           if (logPerformance) {
             console.log(`[Vector Search] Found ${data.length} results`);
           }
@@ -73,11 +94,16 @@ export async function searchWithSupabase(options: SearchOptions = {}, env?: any)
           }));
         }
         
-        if (error && logPerformance) {
-          console.error('[Vector Search] Supabase error:', error.message);
+        if (error) {
+          console.error('[Vector Search] Supabase RPC error:', error);
         }
       }
     } catch (error: any) {
+      console.error('[Vector Search] Error details:', {
+        message: error?.message || 'Unknown error',
+        stack: error?.stack?.slice(0, 500),
+        name: error?.name
+      });
       if (logPerformance) {
         console.error('[Vector Search] Error:', error?.message || 'Unknown error');
       }
@@ -86,8 +112,6 @@ export async function searchWithSupabase(options: SearchOptions = {}, env?: any)
   }
   
   // Fallback to local keyword search
-  if (logPerformance) {
-    console.log('[Search] Using local keyword search');
-  }
+  console.log('[Search Handler] Falling back to local keyword search');
   return searchEntriesLocal(options);
 }

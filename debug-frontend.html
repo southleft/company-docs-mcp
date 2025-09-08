@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Chat UI</title>
+</head>
+<body>
+    <h1>Debug Chat UI</h1>
+    <div id="debug-log"></div>
+    <button onclick="testChatFunction()">Test Chat Function</button>
+    
+    <script>
+        function log(message) {
+            const debugLog = document.getElementById('debug-log');
+            debugLog.innerHTML += '<div>' + new Date().toLocaleTimeString() + ': ' + message + '</div>';
+            console.log(message);
+        }
+        
+        async function testChatFunction() {
+            log('🧪 Starting debug test...');
+            
+            try {
+                const message = "Test accessible button question";
+                log('📤 Sending message: ' + message);
+                
+                const response = await fetch('/ai-chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                
+                log('📡 Response status: ' + response.status + ' ' + response.statusText);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                log('📥 Response data keys: ' + Object.keys(data).join(', '));
+                
+                if (data.error) {
+                    log('❌ Error in response: ' + data.error);
+                } else if (data.response) {
+                    log('✅ Success! Response length: ' + data.response.length);
+                    log('📝 Response preview: ' + data.response.substring(0, 200) + '...');
+                } else {
+                    log('⚠️ Response has no error or response field');
+                    log('📄 Full response: ' + JSON.stringify(data, null, 2));
+                }
+                
+            } catch (error) {
+                log('❌ Error during test: ' + error.message);
+                log('🔍 Error details: ' + JSON.stringify({
+                    name: error.name,
+                    message: error.message,
+                    stack: error.stack?.substring(0, 200)
+                }));
+            }
+        }
+        
+        // Test on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            log('🚀 Debug page loaded');
+        });
+    </script>
+</body>
+</html>
