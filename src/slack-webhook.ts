@@ -5,7 +5,7 @@
  */
 
 import OpenAI from 'openai';
-import { searchEntries } from './lib/content-manager';
+import { searchWithSupabase } from './lib/search-handler';
 import { Category } from './lib/content';
 
 // Timeout helper function
@@ -130,9 +130,9 @@ async function searchAndRespond(command: SlackSlashCommand, env: any) {
       maxRetries: 1,
     });
 
-    // First, search the documentation using vector search
+    // First, search the documentation using vector search (same as chat UI)
     const searchResults = await withTimeout(
-      searchEntries({
+      searchWithSupabase({
         query: command.text,
         limit: 50,  // Get comprehensive results
       }, env),
