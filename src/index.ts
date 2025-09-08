@@ -850,7 +850,7 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 		const wantsSSE = acceptHeader.includes('text/event-stream');
 
 		const body = await request.json() as any;
-		
+
 		// Helper function to format response based on client preference
 		function formatResponse(data: any, isSSE: boolean = wantsSSE): Response {
 			if (isSSE) {
@@ -1009,7 +1009,7 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 						limit: args.limit || 25,
 						timestamp: new Date().toISOString()
 					});
-					
+
 					// Add timeout to search operations (12 seconds)
 					const searchResults = await withTimeout(
 						searchEntries({
@@ -1701,7 +1701,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
             { icon: '🚀', text: 'Getting Started' },
             { icon: '🎨', text: 'Theming' },
             { icon: '🧩', text: 'Tokens' },
-            { icon: '🤝', text: 'Adoption' }
+            { icon: '🤝', text: 'Support' }
         ];
 
         // Chat App Component
@@ -2242,10 +2242,9 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
                                                         const queries = {
                                                             'Overview': 'What documentation is available?',
                                                             'Getting Started': 'How do I get started?',
-                                                            'Search': 'How can I search the documentation?',
-                                                            'API': 'Where is the API documentation?',
-                                                            'Support': 'How do I get support?',
-                                                            'FAQ': 'Where can I find frequently asked questions?'
+                                                            'Theming': 'Tell me about theming',
+                                                            'Tokens': 'Where can I find more information on tokens?',
+                                                            'Support': 'How do I get support?'
                                                         };
                                                         askQuestion(queries[item.text] || item.text);
                                                     }}

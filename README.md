@@ -83,6 +83,7 @@ npm run ingest:markdown -- --dir=./docs
 ```bash
 npm run ingest:web -- --url=https://docs.yourcompany.com
 # Options: --max-depth 3 --max-pages 100 --delay 1000
+# Note: Automatically updates manifest.json with all crawled content
 ```
 
 ##### From CSV File with URLs
@@ -103,6 +104,8 @@ npm run ingest:pdf ./documentation.pdf
 
 All ingestion commands create JSON files in `content/entries/`.
 
+**Important about Web Crawling:** The `ingest:web` command automatically updates the `content/manifest.json` file to include all crawled content. Other ingestion methods may require manual manifest updates.
+
 #### Step 2: Upload to Supabase with Vector Embeddings
 After ingesting content, upload everything to Supabase:
 ```bash
@@ -110,10 +113,11 @@ npm run ingest:supabase
 ```
 
 **Note:** This command:
-- Reads all JSON files from `content/entries/`
+- Reads all JSON files listed in `content/manifest.json`
 - Generates OpenAI embeddings for each document
 - **Clears existing Supabase data** before uploading
 - Uploads content with vector embeddings for semantic search
+- If your content isn't uploading, check that all files are listed in the manifest
 
 ### Tips for Common Use Cases
 

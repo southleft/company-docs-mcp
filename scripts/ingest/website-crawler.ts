@@ -478,3 +478,27 @@ export function createCrawlReport(entries: ContentEntry[], outputPath: string): 
   fs.writeFileSync(outputPath, JSON.stringify(report, null, 2));
   console.log(`📊 Crawl report saved to: ${outputPath}`);
 }
+
+/**
+ * Updates the manifest.json file with all JSON files in the content directory
+ */
+export function updateManifest(outputDir: string = 'content/entries'): void {
+  const manifestPath = path.join(path.dirname(outputDir), 'manifest.json');
+  
+  try {
+    // Get all JSON files in the output directory (excluding hidden files)
+    const files = fs.readdirSync(outputDir)
+      .filter(file => file.endsWith('.json') && !file.startsWith('.'))
+      .sort();
+    
+    const manifest = {
+      files: files,
+      total_files: files.length
+    };
+    
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    console.log(`📋 Updated manifest with ${files.length} files`);
+  } catch (error) {
+    console.error(`❌ Failed to update manifest: ${error instanceof Error ? error.message : error}`);
+  }
+}

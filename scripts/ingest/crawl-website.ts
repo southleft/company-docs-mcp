@@ -4,7 +4,7 @@
  * CLI script for crawling and ingesting entire websites
  */
 
-import { crawlWebsite, createCrawlReport, CrawlOptions } from './website-crawler';
+import { crawlWebsite, createCrawlReport, CrawlOptions, updateManifest } from './website-crawler';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -254,15 +254,11 @@ async function main() {
     if (entries.length > 0) {
       console.log(`\n🔄 Regenerating content manifest...`);
       try {
-        const { exec } = require('child_process');
-        const { promisify } = require('util');
-        const execAsync = promisify(exec);
-
-        await execAsync('npx tsx scripts/build/generate-manifest.ts');
-        console.log(`✅ Manifest updated automatically`);
+        updateManifest(options.outputDir || 'content/entries');
+        console.log(`✅ Manifest updated automatically with all JSON files`);
       } catch (error) {
         console.warn(`⚠️  Failed to regenerate manifest automatically:`, error);
-        console.log(`Please run: npm run build:manifest`);
+        console.log(`Please manually update the manifest if needed`);
       }
 
       console.log(`\n📝 Next steps:`);
