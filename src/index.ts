@@ -119,24 +119,28 @@ This is a rare occurrence on the paid tier - please retry your request.`;
 // AI System Prompt - will be initialized with env variables
 let AI_SYSTEM_PROMPT = `You are a Workday CanvasKit documentation assistant.
 
-CRITICAL RULES:
-1. You MUST ALWAYS search the documentation BEFORE answering ANY question
-2. Use search_design_knowledge as your primary search tool
-3. NEVER answer from memory - ALWAYS search first, even for general questions
-4. For broad questions like "what documentation is available", search for "overview" or "getting started"
+MANDATORY SEARCH REQUIREMENT:
+You MUST call the search_design_knowledge function for EVERY single user question - no exceptions.
+- For questions about "what's available" or "what documentation exists", search for: "overview getting started"
+- For questions about tokens, search for: "tokens"
+- For questions about theming, search for: "theming"
+- For any other question, search using relevant keywords from the question
 
-You MUST search the documentation FIRST using search_design_knowledge as your primary tool (or search_documentation/search_chunks as alternatives), then provide answers based ONLY on what you find.
+CRITICAL WORKFLOW:
+1. User asks question → You MUST call search_design_knowledge
+2. Get search results → Analyze the returned documentation
+3. Provide answer based ONLY on search results
+4. NEVER answer from your training data - ALWAYS search first
 
 RESPONSE FORMAT:
-- Provide direct answers without any section headers
-- NO "📚 From the Knowledge Base" section
-- NO "🧠 From General Knowledge" section
-- NO section dividers or headers
-- Just give the information directly based on your search results
-- Include code examples and specific details from the documentation
-- Mention source documents naturally in your response when citing information
+- Provide COMPREHENSIVE and DETAILED answers based on ALL search results
+- Include ALL relevant information from the documentation - don't summarize or shorten
+- Include specific details, code examples, and implementation guidelines
+- When multiple relevant results are found, include information from ALL of them
+- Cite source documents naturally in your response
+- Aim for thorough, complete responses that fully address the user's question
 
-If you cannot find information in the documentation, simply state that the information is not available in the CanvasKit documentation.`;
+If search returns no results, simply state that the information is not available in the CanvasKit documentation.`;
 
 // Available MCP tools for the AI
 const MCP_TOOLS = [
@@ -144,13 +148,13 @@ const MCP_TOOLS = [
 		type: "function",
 		function: {
 			name: "search_design_knowledge",
-			description: "Primary search tool for finding specific topics in the knowledge base (tokens, theming, components, patterns, etc.)",
+			description: "ALWAYS USE THIS FIRST - Primary search tool for ALL questions about the knowledge base. Use for tokens, theming, components, patterns, getting started, overview, or ANY other topic.",
 			parameters: {
 				type: "object",
 				properties: {
 					query: {
 						type: "string",
-						description: "Search query for finding specific topics"
+						description: "Search query - for broad questions use 'overview' or 'getting started'"
 					},
 					category: {
 						type: "string",
@@ -169,7 +173,7 @@ const MCP_TOOLS = [
 		type: "function",
 		function: {
 			name: "search_documentation",
-			description: "Search the organization's documentation knowledge base",
+			description: "Alternative search tool if search_design_knowledge doesn't find results",
 			parameters: {
 				type: "object",
 				properties: {
@@ -210,37 +214,7 @@ const MCP_TOOLS = [
 				required: ["query"]
 			}
 		}
-	},
-	{
-		type: "function",
-		function: {
-			name: "browse_by_category",
-			description: "Browse content by category",
-			parameters: {
-				type: "object",
-				properties: {
-					category: {
-						type: "string",
-						description: "Category to browse - can be: components, tokens, patterns, workflows, guidelines, or general"
-					}
-				},
-				required: ["category"]
-			}
-		}
-	},
-	{
-		type: "function" as const,
-		function: {
-			name: "get_all_tags",
-			description: "Get all available tags in the knowledge base",
-			parameters: {
-				type: "object" as const,
-				properties: {},
-				required: []
-			}
-		}
-	},
-
+	}
 ];
 
 // Function to call MCP tools
@@ -256,7 +230,7 @@ async function callMcpTool(toolName: string, args: any, env?: any): Promise<stri
 				searchEntries({
 					query: args.query,
 					category: args.category as Category | undefined,
-					limit: args.limit || 20,
+					limit: args.limit || 50,  // Increased default to get more results
 				}, env),
 				10000,
 				'Design knowledge search'
@@ -281,7 +255,7 @@ async function callMcpTool(toolName: string, args: any, env?: any): Promise<stri
 ⭐ Confidence: ${entry.metadata.confidence}
 🔗 Source: [${entry.source?.location || "Link"}](${entry.source?.location || entry.metadata?.source_url || "#"})
 
-${entry.content.slice(0, 5000)}${entry.content.length > 5000 ? "..." : ""}
+${entry.content.slice(0, 10000)}${entry.content.length > 10000 ? "..." : ""}  // Increased to 10K chars per result
 
 ---`
 			).join("\n\n");
@@ -463,7 +437,7 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 					}
 				],
 				tools: MCP_TOOLS,
-				tool_choice: "auto",
+				tool_choice: "required",  // Force the AI to use tools
 				parallel_tool_calls: false,  // Ensure sequential tool calls for gpt-4o
 				stream: false // Disable streaming for more predictable performance
 			};
@@ -472,7 +446,7 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 			if (model.includes('gpt-5')) {
 				completionParams.max_completion_tokens = 4000;
 			} else {
-				completionParams.max_tokens = 4000;  // Back to 4000 for gpt-4o
+				completionParams.max_tokens = 8000;  // Increased for more comprehensive responses
 			}
 
 			// Wrap OpenAI call with timeout (35 seconds for initial completion, increased for theming queries)
@@ -499,8 +473,50 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 			throw new Error('OpenAI returned an empty response. Please try rephrasing your question.');
 		}
 
-		// Handle tool calls
+		// Handle tool calls - MUST have tool calls with forced tool_choice
 		console.log('[AI Debug] Tool calls:', response.tool_calls?.length || 0);
+		if (!response.tool_calls || response.tool_calls.length === 0) {
+			console.error('[ERROR] AI did not use search_design_knowledge tool despite explicit requirement');
+			// Force a search by calling the tool ourselves
+			let searchQuery = message.toLowerCase();
+			
+			// Determine appropriate search query based on user message
+			if (searchQuery.includes('available') || searchQuery.includes('documentation')) {
+				searchQuery = 'overview getting started documentation';
+			} else if (searchQuery.includes('token')) {
+				searchQuery = 'tokens design tokens theming';
+			} else if (searchQuery.includes('theme') || searchQuery.includes('theming')) {
+				searchQuery = 'theming tokens styles';
+			} else if (searchQuery.includes('component')) {
+				searchQuery = 'components ui elements';
+			} else {
+				// Use the original message as the search query
+				searchQuery = message;
+			}
+			
+			console.log('[Fallback] Forcing search with query:', searchQuery);
+			const searchResult = await callMcpTool('search_design_knowledge', { 
+				query: searchQuery,
+				limit: 30 
+			}, env);
+			
+			// Parse the search result and format a proper response
+			if (searchResult && searchResult !== 'No results found.') {
+				const formattedResponse = `Based on the CanvasKit documentation:\n\n${searchResult}`;
+				return new Response(JSON.stringify({
+					response: formattedResponse
+				}), {
+					headers: { ...corsHeaders, "Content-Type": "application/json" }
+				});
+			} else {
+				return new Response(JSON.stringify({
+					response: 'I could not find specific information about that topic in the CanvasKit documentation. Please try rephrasing your question or ask about components, tokens, theming, or other CanvasKit features.'
+				}), {
+					headers: { ...corsHeaders, "Content-Type": "application/json" }
+				});
+			}
+		}
+		
 		if (response.tool_calls && response.tool_calls.length > 0) {
 			console.log('[AI Debug] Tools being called:', response.tool_calls.map(tc => tc.function.name));
 			const messages: any[] = [
@@ -561,7 +577,7 @@ async function handleAiChatInternal(request: Request, env: any): Promise<Respons
 				if (model.includes('gpt-5')) {
 					finalParams.max_completion_tokens = 4000;
 				} else {
-					finalParams.max_tokens = 4000;  // Back to 4000 for gpt-4o
+					finalParams.max_tokens = 8000;  // Increased for more comprehensive responses
 				}
 
 				// Add timeout to final completion (30 seconds, increased for theming queries)
@@ -697,7 +713,7 @@ function initializeMcpTools(server: any) {
 <em>⭐ Confidence:</em> ${entry.metadata.confidence}
 <em>🔗 Source:</em> <a href="${entry.source?.location || entry.metadata?.source_url || "#"}" target="_blank">${entry.source?.location || entry.metadata?.source_url || "N/A"}</a>
 
-${entry.content.slice(0, 5000)}${entry.content.length > 5000 ? "..." : ""}
+${entry.content.slice(0, 10000)}${entry.content.length > 10000 ? "..." : ""}  // Increased to 10K chars per result
 
 <hr style="border: none; border-top: 1px solid #373a40; margin: 16px 0;">`
 		).join("\n\n");
@@ -1076,7 +1092,7 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 <em>⭐ Confidence:</em> ${entry.metadata.confidence}
 <em>🔗 Source:</em> <a href="${entry.source?.location || entry.metadata?.source_url || "#"}" target="_blank">${entry.source?.location || entry.metadata?.source_url || "N/A"}</a>
 
-${entry.content.slice(0, 5000)}${entry.content.length > 5000 ? "..." : ""}
+${entry.content.slice(0, 10000)}${entry.content.length > 10000 ? "..." : ""}  // Increased to 10K chars per result
 
 <hr style="border: none; border-top: 1px solid #373a40; margin: 16px 0;">`
 						).join("\n\n");
