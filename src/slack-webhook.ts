@@ -357,24 +357,23 @@ Remember: Your response MUST be extremely long and detailed. Include ALL informa
     if (searchResults.length > 0) {
       blocks.push({ type: 'divider' });
       
-      // Create sources text with clickable links
+      // Create sources text with clickable links to the web UI
       let sourcesText = '*Sources:*\n';
-      const uniqueSources = new Map();
+      const uniqueSources = new Set();
+      const baseUrl = 'https://company-docs-mcp.southleft-llc.workers.dev';
       
-      // Collect unique sources from search results
-      searchResults.forEach(entry => {
-        const sourceUrl = entry.source?.location || entry.metadata?.source_url;
-        if (sourceUrl && !uniqueSources.has(entry.title)) {
-          uniqueSources.set(entry.title, sourceUrl);
-        }
-      });
-      
-      // Format sources as clickable links (up to 10)
+      // Collect unique sources from search results (up to 10)
       let sourceCount = 0;
-      uniqueSources.forEach((url, title) => {
-        if (sourceCount < 10) {
-          // Slack uses <url|text> format for links
-          sourcesText += `• <${url}|${title}>\n`;
+      searchResults.forEach(entry => {
+        if (sourceCount < 10 && entry.title && !uniqueSources.has(entry.title)) {
+          uniqueSources.add(entry.title);
+          
+          // Create a search URL for this document
+          const searchQuery = encodeURIComponent(entry.title);
+          const searchUrl = `${baseUrl}/?q=${searchQuery}`;
+          
+          // Slack uses <url|text> format for clickable links in mrkdwn
+          sourcesText += `• <${searchUrl}|${entry.title}>\n`;
           sourceCount++;
         }
       });
