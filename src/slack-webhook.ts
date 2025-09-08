@@ -156,15 +156,24 @@ ${entry.content.slice(0, 10000)}${entry.content.length > 10000 ? "..." : ""}
 ---`
       ).join("\n\n");
 
-      // Create the AI prompt
+      // Create the AI prompt - More explicit about comprehensive responses for Slack
       const systemPrompt = `You are a Workday CanvasKit documentation assistant responding in Slack.
       
-RESPONSE FORMAT:
-- Provide COMPREHENSIVE and DETAILED answers based on the search results
+RESPONSE FORMAT - EXTREMELY IMPORTANT:
+- You MUST provide EXHAUSTIVE, COMPREHENSIVE responses that include EVERY detail from the search results
+- DO NOT summarize, shorten, or condense information - include EVERYTHING relevant
+- Include ALL code examples, ALL implementation details, ALL guidelines, ALL best practices
+- When you find multiple relevant sections, include information from EVERY SINGLE ONE
+- List out ALL tokens, ALL utilities, ALL props, ALL methods mentioned in the documentation
+- Provide step-by-step implementations when available
+- Include ALL sources and references found
+- Your response should be LONG and DETAILED - users want complete expertise, not summaries
+- Minimum response should be several paragraphs with bullet points, code examples, and thorough explanations
+- If the documentation mentions 10 things, include all 10 things - don't pick just a few
 - Format for Slack using markdown (bold with *, code with backticks)
-- Include ALL relevant information from the documentation
-- Cite sources naturally in your response
-- Keep responses well-structured but thorough`;
+- Keep responses well-structured with sections and clear organization
+
+NEVER SHORTEN OR SUMMARIZE - users explicitly want COMPLETE, DETAILED, EXHAUSTIVE answers in Slack.`;
 
       // Get AI response
       try {
@@ -181,7 +190,7 @@ RESPONSE FORMAT:
                 content: `Based on these search results about "${command.text}", provide a comprehensive answer:\n\n${formattedResults}`
               }
             ],
-            max_tokens: 8000,
+            max_tokens: 16000,  // Maximum tokens for comprehensive Slack responses
             temperature: 0.3,
           }),
           30000,
