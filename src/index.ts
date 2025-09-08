@@ -2112,12 +2112,11 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
                                         minHeight: 'calc(100vh - 220px)',
                                         textAlign: 'center',
                                     }}>
-                                        {/* Organization Logo (optional) */}
-                                        ${env.ORGANIZATION_LOGO_URL ? `
+                                        {/* Organization Logo with MCP fallback */}
                                         <div style={{ marginBottom: '32px' }}>
                                             <img
-                                                src="` + env.ORGANIZATION_LOGO_URL + `"
-                                                alt="` + (env.ORGANIZATION_NAME || 'Organization') + ` Logo"
+                                                src="` + (env.ORGANIZATION_LOGO_URL || 'https://p198.p4.n0.cdn.zight.com/items/4guEeYlX/50dfc8bb-d31c-4a22-81ab-cee7ed5a5c18.png') + `"
+                                                alt="` + (env.ORGANIZATION_NAME || 'MCP') + ` Logo"
                                                 style={{
                                                     maxHeight: '120px',
                                                     maxWidth: '300px',
@@ -2127,7 +2126,6 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
                                                 }}
                                             />
                                         </div>
-                                        ` : ''}
 
                                         {/* Elegant centered title */}
                                         <div style={{ marginBottom: '48px' }}>
