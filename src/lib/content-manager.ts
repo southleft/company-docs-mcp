@@ -242,8 +242,8 @@ export function searchEntries(options: SearchOptions = {}): ContentEntry[] {
       score: calculateRelevanceScore(entry, queryLower, searchTerms)
     }));
 
-    // Filter out entries with very low scores (less than 0.5)
-    const relevantResults = scoredResults.filter(item => item.score >= 0.5);
+    // Filter out entries with very low scores (less than 0.2)
+    const relevantResults = scoredResults.filter(item => item.score >= 0.2);
 
     // If we have good matches, use them. Otherwise, fall back to basic matching
     if (relevantResults.length > 0) {

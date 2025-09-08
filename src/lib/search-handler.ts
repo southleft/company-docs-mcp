@@ -67,31 +67,50 @@ export async function searchWithSupabase(options: SearchOptions = {}, env?: any)
         });
         
         if (!error && data && data.length > 0) {
-          console.log('[Search Handler] Returning Supabase results');
-          if (logPerformance) {
-            console.log(`[Vector Search] Found ${data.length} results`);
-          }
-          
-          // Convert Supabase results to ContentEntry format
-          return data.map((row: any) => ({
-            id: row.id,
-            title: row.title,
-            content: row.content || '',
-            source: {
-              type: row.source_type || 'database',
-              location: row.source_location || 'supabase',
-              ingested_at: row.ingested_at || new Date().toISOString()
-            },
-            chunks: [],
-            metadata: {
-              category: row.category || 'general',
-              tags: row.tags || [],
-              confidence: row.confidence || confidence || 'medium',
-              system: row.system_name || '',
-              last_updated: row.updated_at || new Date().toISOString(),
-              source_url: row.source_location || ''
+          // Filter results by quality - similarity score from vector search
+          const qualityThreshold = 0.3; // Minimum similarity score
+          const qualityResults = data.filter((row: any) => {
+            // If no similarity score, check if it's a good text match
+            if (row.similarity !== undefined) {
+              return row.similarity >= qualityThreshold;
             }
-          }));
+            // Check if title or content contains the query
+            const lowerQuery = query.toLowerCase();
+            return (row.title?.toLowerCase().includes(lowerQuery) || 
+                    row.content?.toLowerCase().includes(lowerQuery));
+          });
+          
+          console.log(`[Search Handler] Supabase returned ${data.length} results, ${qualityResults.length} meet quality threshold`);
+          
+          if (qualityResults.length > 0) {
+            console.log('[Search Handler] Returning quality Supabase results');
+            if (logPerformance) {
+              console.log(`[Vector Search] Found ${qualityResults.length} quality results`);
+            }
+            
+            // Convert Supabase results to ContentEntry format
+            return qualityResults.map((row: any) => ({
+              id: row.id,
+              title: row.title,
+              content: row.content || '',
+              source: {
+                type: row.source_type || 'database',
+                location: row.source_location || 'supabase',
+                ingested_at: row.ingested_at || new Date().toISOString()
+              },
+              chunks: [],
+              metadata: {
+                category: row.category || 'general',
+                tags: row.tags || [],
+                confidence: row.confidence || confidence || 'medium',
+                system: row.system_name || '',
+                last_updated: row.updated_at || new Date().toISOString(),
+                source_url: row.source_location || ''
+              }
+            }));
+          } else {
+            console.log('[Search Handler] Supabase results below quality threshold, falling back to local search');
+          }
         }
         
         if (error) {

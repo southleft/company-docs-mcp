@@ -119,7 +119,7 @@ This is a rare occurrence on the paid tier - please retry your request.`;
 // AI System Prompt - will be initialized with env variables
 let AI_SYSTEM_PROMPT = `You are a Workday CanvasKit documentation assistant.
 
-CRITICAL: You MUST search the documentation FIRST using search_chunks and/or search_documentation tools, then provide answers based ONLY on what you find.
+CRITICAL: You MUST search the documentation FIRST using search_design_knowledge as your primary tool (or search_documentation/search_chunks as alternatives), then provide answers based ONLY on what you find.
 
 RESPONSE FORMAT:
 - Provide direct answers without any section headers
@@ -134,6 +134,31 @@ If you cannot find information in the documentation, simply state that the infor
 
 // Available MCP tools for the AI
 const MCP_TOOLS = [
+	{
+		type: "function",
+		function: {
+			name: "search_design_knowledge",
+			description: "Primary search tool for finding specific topics in the knowledge base (tokens, theming, components, patterns, etc.)",
+			parameters: {
+				type: "object",
+				properties: {
+					query: {
+						type: "string",
+						description: "Search query for finding specific topics"
+					},
+					category: {
+						type: "string",
+						description: "Filter by category (optional)"
+					},
+					limit: {
+						type: "number",
+						description: "Maximum number of results (default: 25)"
+					}
+				},
+				required: ["query"]
+			}
+		}
+	},
 	{
 		type: "function",
 		function: {
@@ -912,7 +937,7 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 			const tools = [
 				{
 					name: "search_design_knowledge",
-					description: "Search through design system knowledge base entries by query, category, or tags",
+					description: "Search through design system knowledge base entries by query, category, or tags. Use this as the primary tool for finding information about specific topics like tokens, theming, components, patterns, etc.",
 					inputSchema: {
 						type: "object",
 						properties: {
@@ -922,8 +947,8 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 							},
 							category: {
 								type: "string",
-								description: "Filter by category (e.g., 'figma', 'tokens', 'components')",
-								enum: ["figma", "tokens", "components", "documentation", "workflow", "governance", "accessibility", "tools", "case-studies", "foundations"]
+								description: "Filter by category (optional - only use actual content categories)",
+								enum: ["documentation", "components", "guidelines", "patterns", "workflows"]
 							},
 							tags: {
 								type: "array",
@@ -960,14 +985,14 @@ async function handleMcpRequestInternal(request: Request, env?: Env): Promise<Re
 				},
 				{
 					name: "browse_by_category",
-					description: "Browse all entries in a specific category",
+					description: "Browse all entries in a specific category (use search_documentation for finding specific topics like tokens, themes, etc.)",
 					inputSchema: {
 						type: "object",
 						properties: {
 							category: {
 								type: "string",
-								description: "Category to browse",
-								enum: ["figma", "tokens", "components", "documentation", "workflow", "governance", "accessibility", "tools", "case-studies", "foundations"]
+								description: "Category to browse - only use actual content categories",
+								enum: ["documentation", "components", "guidelines", "patterns", "workflows"]
 							}
 						},
 						required: ["category"]
