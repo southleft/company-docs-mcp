@@ -1,10 +1,24 @@
 /**
  * Slack webhook handler for Cloudflare Workers
  * Handles slash commands directly without Socket Mode
+ * Now uses the same AI-powered search as the chat UI for consistency
  */
 
-import { searchChunks } from './lib/content-manager';
-import { formatSourceReference } from './lib/source-formatter';
+import OpenAI from 'openai';
+import { searchEntries } from './lib/content-manager';
+import { Category } from './lib/content';
+
+// Timeout helper function
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`${operation} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    })
+  ]);
+}
 
 interface SlackSlashCommand {
   token: string;
@@ -56,7 +70,7 @@ export async function handleSlackCommand(request: Request, env: any): Promise<Re
     trigger_id: formData.get('trigger_id') as string,
   };
 
-  // Validate it's the expected command
+  // Validate the command
   if (command.command !== (env.SLACK_SLASH_COMMAND || '/docs')) {
     return new Response('Invalid command', { status: 400 });
   }
@@ -72,9 +86,9 @@ export async function handleSlackCommand(request: Request, env: any): Promise<Re
           text: {
             type: 'mrkdwn',
             text: `*How to use ${command.command}:*\n\n` +
-                  `• \`${command.command} breakpoints\` - Search for breakpoints\n` +
-                  `• \`${command.command} typography spacing\` - Search for typography and spacing\n` +
-                  `• \`${command.command} switches\` - Learn about switches`
+                  `• \`${command.command} tokens\` - Learn about design tokens\n` +
+                  `• \`${command.command} theming\` - Understand theming in Canvas Kit\n` +
+                  `• \`${command.command} components\` - Explore available components`
           }
         }
       ]
@@ -101,95 +115,155 @@ export async function handleSlackCommand(request: Request, env: any): Promise<Re
 
 async function searchAndRespond(command: SlackSlashCommand, env: any) {
   try {
-    // Search the documentation
-    const results = searchChunks(command.text, 5);
+    // Use the same AI-powered search as the chat UI
+    const apiKey = env?.OPENAI_API_KEY;
+    const model = env?.OPENAI_MODEL || "gpt-4o";
     
-    let blocks: SlackBlock[] = [];
-    
-    if (results.length === 0) {
-      blocks = [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `🔍 No documentation found matching *"${command.text}"*\n\nTry:\n• Using different keywords\n• Checking spelling\n• Being more specific`
-          }
-        }
-      ];
+    if (!apiKey) {
+      throw new Error("OpenAI API key not configured");
+    }
+
+    // Initialize OpenAI
+    const openai = new OpenAI({
+      apiKey: apiKey,
+      timeout: 45000,
+      maxRetries: 1,
+    });
+
+    // First, search the documentation using vector search
+    const searchResults = await withTimeout(
+      searchEntries({
+        query: command.text,
+        limit: 50,  // Get comprehensive results
+      }, env),
+      10000,
+      'Slack search'
+    );
+
+    let responseText = '';
+
+    if (searchResults.length === 0) {
+      responseText = `No documentation found matching "${command.text}". Please try different keywords or check the spelling.`;
     } else {
-      // Header
-      blocks.push({
-        type: 'header',
-        text: {
-          type: 'plain_text',
-          text: '📚 CanvasKit Documentation',
-          emoji: true
-        }
-      });
+      // Format search results for the AI
+      const formattedResults = searchResults.map((entry, index) =>
+        `**${index + 1}. ${entry.title}**
+Category: ${entry.metadata.category}
+Tags: ${entry.metadata.tags.join(", ")}
+Source: ${entry.source?.location || entry.metadata?.source_url || "N/A"}
 
-      // Context
-      blocks.push({
-        type: 'context',
-        elements: [
-          {
-            type: 'mrkdwn',
-            text: `Found ${results.length} result${results.length === 1 ? '' : 's'} for *"${command.text}"*`
-          }
-        ]
-      });
+${entry.content.slice(0, 10000)}${entry.content.length > 10000 ? "..." : ""}
+---`
+      ).join("\n\n");
 
-      blocks.push({ type: 'divider' });
+      // Create the AI prompt
+      const systemPrompt = `You are a Workday CanvasKit documentation assistant responding in Slack.
+      
+RESPONSE FORMAT:
+- Provide COMPREHENSIVE and DETAILED answers based on the search results
+- Format for Slack using markdown (bold with *, code with backticks)
+- Include ALL relevant information from the documentation
+- Cite sources naturally in your response
+- Keep responses well-structured but thorough`;
 
-      // Add results
-      results.slice(0, 3).forEach((result, index) => {
-        const { displayName, url } = formatSourceReference(result.entry);
-        
-        // Clean up chunk text
-        const cleanText = result.chunk.text
-          .replace(/^[\-\*•]\s*/gm, '')
-          .replace(/\n{3,}/g, '\n\n')
-          .replace(/^#+\s*/gm, '')
-          .trim();
-        
-        const truncated = cleanText.length > 200 
-          ? cleanText.substring(0, 197) + '...'
-          : cleanText;
+      // Get AI response
+      try {
+        const completion = await withTimeout(
+          openai.chat.completions.create({
+            model: model,
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt
+              },
+              {
+                role: "user",
+                content: `Based on these search results about "${command.text}", provide a comprehensive answer:\n\n${formattedResults}`
+              }
+            ],
+            max_tokens: 8000,
+            temperature: 0.3,
+          }),
+          30000,
+          'OpenAI completion for Slack'
+        );
 
-        blocks.push({
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `*${index + 1}. ${result.entry.title}*\n${truncated}`
-          },
-          accessory: (url && /^https?:\/\//i.test(url)) ? {
-            type: 'button',
-            text: {
-              type: 'plain_text',
-              text: 'View Source'
-            },
-            url: url,
-            action_id: `view_source_${index}`
-          } : undefined
-        });
-
-        if (index < Math.min(results.length - 1, 2)) {
-          blocks.push({ type: 'divider' });
-        }
-      });
-
-      // Footer
-      if (results.length > 3) {
-        blocks.push({
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: `_Showing top 3 of ${results.length} results_`
-            }
-          ]
+        responseText = completion.choices[0].message.content || 'Unable to generate response.';
+      } catch (aiError: any) {
+        console.error('AI Error:', aiError);
+        // Fallback to showing raw search results if AI fails
+        responseText = `Found ${searchResults.length} results for "${command.text}":\n\n`;
+        searchResults.slice(0, 3).forEach((entry, index) => {
+          responseText += `*${index + 1}. ${entry.title}*\n`;
+          responseText += `${entry.content.slice(0, 500)}...\n\n`;
         });
       }
     }
+
+    // Format response for Slack blocks
+    let blocks: SlackBlock[] = [];
+    
+    // Header
+    blocks.push({
+      type: 'header',
+      text: {
+        type: 'plain_text',
+        text: '📚 CanvasKit Documentation',
+        emoji: true
+      }
+    });
+
+    // Context with query
+    blocks.push({
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `Answer for *"${command.text}"*`
+        }
+      ]
+    });
+
+    blocks.push({ type: 'divider' });
+
+    // Split long responses into multiple sections for Slack's block limits
+    const maxSectionLength = 3000;
+    const responseParts = [];
+    
+    if (responseText.length > maxSectionLength) {
+      // Split by paragraphs to avoid breaking in the middle of content
+      const paragraphs = responseText.split('\n\n');
+      let currentPart = '';
+      
+      for (const paragraph of paragraphs) {
+        if ((currentPart + '\n\n' + paragraph).length > maxSectionLength && currentPart) {
+          responseParts.push(currentPart);
+          currentPart = paragraph;
+        } else {
+          currentPart = currentPart ? currentPart + '\n\n' + paragraph : paragraph;
+        }
+      }
+      if (currentPart) {
+        responseParts.push(currentPart);
+      }
+    } else {
+      responseParts.push(responseText);
+    }
+
+    // Add response sections
+    responseParts.forEach((part, index) => {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: part
+        }
+      });
+      
+      if (index < responseParts.length - 1) {
+        blocks.push({ type: 'divider' });
+      }
+    });
 
     // Send the follow-up message
     await fetch(command.response_url, {
@@ -197,14 +271,12 @@ async function searchAndRespond(command: SlackSlashCommand, env: any) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         response_type: 'in_channel',
-        blocks,
-        text: results.length > 0 
-          ? `Found ${results.length} result${results.length === 1 ? '' : 's'} for "${command.text}"`
-          : `No results found for "${command.text}"`
+        blocks
       })
     });
+
   } catch (error) {
-    console.error('Error processing Slack command:', error);
+    console.error('Slack command error:', error);
     
     // Send error message
     await fetch(command.response_url, {
@@ -212,7 +284,7 @@ async function searchAndRespond(command: SlackSlashCommand, env: any) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         response_type: 'ephemeral',
-        text: '❌ Sorry, an error occurred while searching. Please try again.'
+        text: '❌ An error occurred while searching the documentation. Please try again later.'
       })
     });
   }
