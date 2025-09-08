@@ -45,7 +45,7 @@ interface SlackBlock {
   accessory?: any;
 }
 
-export async function handleSlackCommand(request: Request, env: any): Promise<Response> {
+export async function handleSlackCommand(request: Request, env: any, ctx?: any): Promise<Response> {
   // Verify the request is from Slack
   const signature = request.headers.get('X-Slack-Signature');
   const timestamp = request.headers.get('X-Slack-Request-Timestamp');
@@ -103,10 +103,17 @@ export async function handleSlackCommand(request: Request, env: any): Promise<Re
     text: `🔍 Searching for: "${command.text}"...`
   };
 
-  // Send immediate response
-  setTimeout(async () => {
-    await searchAndRespond(command, env);
-  }, 0);
+  // Use waitUntil to keep the worker alive for the async response
+  // This ensures the async work completes even after we return the immediate response
+  if (ctx && ctx.waitUntil) {
+    ctx.waitUntil(searchAndRespond(command, env));
+  } else {
+    // Fallback for environments without waitUntil
+    console.log('[Slack] Warning: No execution context available, async response may not complete');
+    searchAndRespond(command, env).catch(err => 
+      console.error('[Slack] Error in searchAndRespond:', err)
+    );
+  }
 
   return new Response(JSON.stringify(immediateResponse), {
     headers: { 'Content-Type': 'application/json' }

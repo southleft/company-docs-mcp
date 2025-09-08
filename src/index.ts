@@ -1369,7 +1369,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 	if (url.pathname === "/slack" && request.method === "POST") {
 		// Ensure content is loaded for Slack commands
 		await ensureContentLoaded();
-		return handleSlackCommand(request, env);
+		return handleSlackCommand(request, env, ctx);
 	}
 
 	// Simple JSON search endpoint for Slack Socket Mode bot and other clients
