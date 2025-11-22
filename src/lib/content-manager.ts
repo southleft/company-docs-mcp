@@ -9,21 +9,43 @@ import { ContentEntry, Category, SearchOptions, ContentChunk } from "../../types
 let entries: ContentEntry[] = [];
 let tags: Set<string> = new Set();
 
-// Sample entries for demo purposes
+// Placeholder entries for when no content has been ingested
+// Users should replace this by ingesting their own documentation
 export const SAMPLE_ENTRIES: ContentEntry[] = [
   {
-    id: "sample-button-guide",
-    title: "Button Component Guidelines",
+    id: "placeholder-welcome",
+    title: "Welcome to Your Documentation Assistant",
     source: {
       type: "html",
-      location: "sample-button-guidelines.json",
-      ingested_at: "2024-01-20T10:00:00Z"
+      location: "placeholder-welcome.json",
+      ingested_at: new Date().toISOString()
     },
-    content: "Buttons are fundamental interactive elements in design systems. They should be clearly distinguishable, accessible, and follow consistent patterns across all platforms. Primary buttons are used for main actions, secondary buttons for supporting actions, and tertiary buttons for subtle interactions.",
+    content: `This is a placeholder message that appears when no documentation has been ingested yet.
+
+To add your own documentation to this MCP server, please follow these steps:
+
+1. Prepare your documentation in one of these formats:
+   - Markdown files in a directory
+   - Website/documentation site URL
+   - CSV file with URLs to crawl
+   - Individual PDF files
+
+2. Run the appropriate ingestion command:
+   - For Markdown: npm run ingest:markdown -- --dir=./path/to/docs
+   - For websites: npm run ingest:web -- --url=https://your-docs.com
+   - For CSV files: npm run ingest:csv -- urls.csv
+   - For PDFs: npm run ingest:pdf ./document.pdf
+
+3. Upload to Supabase with vector embeddings:
+   - npm run ingest:supabase
+
+Once your documentation is ingested, this placeholder will be replaced with actual search results from your content.
+
+For more details, see the README.md file in the project root.`,
     chunks: [
       {
         id: "chunk-1",
-        text: "Buttons are fundamental interactive elements in design systems. They should be clearly distinguishable, accessible, and follow consistent patterns across all platforms.",
+        text: "This is a placeholder message that appears when no documentation has been ingested yet. To add your own documentation, you need to ingest content and upload it to Supabase.",
         metadata: {
           section: "Introduction",
           chunkIndex: 0
@@ -31,19 +53,19 @@ export const SAMPLE_ENTRIES: ContentEntry[] = [
       },
       {
         id: "chunk-2",
-        text: "Primary buttons are used for main actions, secondary buttons for supporting actions, and tertiary buttons for subtle interactions.",
+        text: "Run ingestion commands to add your documentation: npm run ingest:markdown for local files, npm run ingest:web for websites, or npm run ingest:csv for URL lists. Then upload to Supabase with npm run ingest:supabase.",
         metadata: {
-          section: "Button Types",
+          section: "Getting Started",
           chunkIndex: 1
         }
       }
     ],
     metadata: {
-      category: "components",
-      tags: ["button", "interaction", "accessibility"],
+      category: "general",
+      tags: ["getting-started", "setup", "documentation"],
       confidence: "high",
-      system: "Sample Design System",
-      last_updated: "2024-01-20T10:00:00Z"
+      system: "Placeholder Content",
+      last_updated: new Date().toISOString()
     }
   }
 ];
