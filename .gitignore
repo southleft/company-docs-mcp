@@ -63,3 +63,12 @@ temp/
 # OS files
 Thumbs.db
 desktop.ini
+
+# CSV data files (source data for ingestion)
+*.csv
+
+# Wrangler configuration (may contain sensitive data)
+wrangler.toml
+
+# Keep example only
+!wrangler.toml.example

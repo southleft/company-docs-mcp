@@ -20,9 +20,9 @@ async function testConnection() {
     
     // Test connection by checking if tables exist
     const { data, error } = await supabase
-      .from('documentation_entries')
-      .select('id')
-      .limit(1);
+      .from('content_entries')
+      .select('id, title')
+      .limit(5);
 
     if (error) {
       if (error.code === '42P01') {
@@ -35,6 +35,23 @@ async function testConnection() {
     }
 
     console.log('✅ Supabase connection successful!');
+    
+    // Count total entries
+    const { count, error: countError } = await supabase
+      .from('content_entries')
+      .select('*', { count: 'exact', head: true });
+    
+    if (countError) {
+      console.log('⚠️  Could not count entries:', countError.message);
+    } else {
+      console.log(`📊 Total entries in database: ${count || 0}`);
+      if (data && data.length > 0) {
+        console.log('\n📚 Sample entries:');
+        data.forEach((entry: any, index: number) => {
+          console.log(`   ${index + 1}. ${entry.title}`);
+        });
+      }
+    }
     
     // Check OpenAI key
     if (process.env.OPENAI_API_KEY) {

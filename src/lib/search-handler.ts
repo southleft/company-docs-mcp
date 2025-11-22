@@ -51,6 +51,15 @@ export async function searchWithSupabase(options: SearchOptions = {}, env?: any)
         console.log('[Search Handler] Embedding generated, length:', queryEmbedding.length);
         
         // Search Supabase with vector similarity
+        console.log('[Search Handler] Calling search_content RPC with params:', {
+          match_threshold: 0.15,
+          match_count: limit,
+          query_text: query,
+          filter_category: category,
+          filter_tags: filterTags,
+          embeddingLength: queryEmbedding.length
+        });
+        
         const { data, error } = await supabase.rpc('search_content', {
           query_embedding: queryEmbedding,
           query_text: query, // Hybrid search
@@ -61,14 +70,19 @@ export async function searchWithSupabase(options: SearchOptions = {}, env?: any)
         });
         
         console.log('[Search Handler] Supabase response:', { 
-          error: error?.message, 
+          errorMessage: error?.message,
+          errorCode: error?.code,
+          errorDetails: error?.details,
+          errorHint: error?.hint,
           dataLength: data?.length || 0,
-          hasData: !!data 
+          hasData: !!data,
+          firstResultTitle: data?.[0]?.title,
+          firstResultSimilarity: data?.[0]?.similarity
         });
         
         if (!error && data && data.length > 0) {
           // Filter results by quality - similarity score from vector search
-          const qualityThreshold = 0.3; // Minimum similarity score
+          const qualityThreshold = 0.15; // Minimum similarity score (matches match_threshold)
           const qualityResults = data.filter((row: any) => {
             // If no similarity score, check if it's a good text match
             if (row.similarity !== undefined) {

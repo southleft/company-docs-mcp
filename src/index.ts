@@ -13,6 +13,7 @@ import { searchWithSupabase as searchEntries } from "./lib/search-handler";
 import { formatSourceReference, formatInlineCitation } from "./lib/source-formatter";
 import { Category, ContentEntry } from "./lib/content";
 import { handleSlackCommand } from "./slack-webhook";
+import { handleStreamableHttp } from "./streamable-http-handler";
 
 // OpenAI integration
 import { OpenAI } from "openai";
@@ -1359,7 +1360,7 @@ IMPORTANT: Always search thoroughly using multiple query variations before claim
 		const url = new URL(request.url);
 
 		if (url.pathname === "/mcp") {
-			return handleMcpRequest(request, env);
+			return handleStreamableHttp(request, env, ctx);
 		}
 
 	if (url.pathname === "/ai-chat") {

@@ -32,9 +32,9 @@
 		"db:migrate": "tsx scripts/migrate-database.ts"
 	},
 	"dependencies": {
-		"@modelcontextprotocol/sdk": "^1.0.7",
+		"@modelcontextprotocol/sdk": "^1.22.0",
 		"@slack/bolt": "^4.4.0",
-		"@supabase/supabase-js": "^2.56.1",
+		"@supabase/supabase-js": "^2.82.0",
 		"@types/cheerio": "^0.22.35",
 		"abort-controller": "^3.0.0",
 		"agents": "^0.0.95",

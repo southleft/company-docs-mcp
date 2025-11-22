@@ -8,8 +8,14 @@ ORGANIZATION_NAME = "Your Organization"
 ORGANIZATION_DOMAIN = "example.com"
 ORGANIZATION_LOGO_URL = ""
 ORGANIZATION_TAGLINE = "Get instant answers from your documentation."
-SUPABASE_URL = "https://dflbcieneduppihytwkr.supabase.co"
-SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmbGJjaWVuZWR1cHBpaHl0d2tyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcwODMzNjQsImV4cCI6MjA3MjY1OTM2NH0.gHkERJlkKTMxnZupYmbq1-EQvRE9uCR8ctt5MEDIkUk"
+# SECURITY: DO NOT commit real secrets! Use wrangler secrets instead:
+# echo "your-url" | npx wrangler secret put SUPABASE_URL
+# echo "your-key" | npx wrangler secret put SUPABASE_ANON_KEY
+# echo "your-key" | npx wrangler secret put SUPABASE_SERVICE_KEY
+# echo "your-key" | npx wrangler secret put OPENAI_API_KEY
+SUPABASE_URL = "https://your-project.supabase.co"
+SUPABASE_ANON_KEY = "your-supabase-anon-key-here"
+# OPENAI_API_KEY removed - set as secret only!
 VECTOR_SEARCH_ENABLED = "true"
 VECTOR_SEARCH_MODE = "vector"
 

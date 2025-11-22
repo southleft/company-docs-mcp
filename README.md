@@ -166,74 +166,27 @@ npm run test:local
 
 ### 5. Connect to Claude Desktop
 
-Add to your Claude Desktop configuration:
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+**One-Step Custom Connector Setup** (No JSON editing required!)
 
-**Important:** Claude Desktop does NOT support remote MCP servers directly via a "url" property. You need to use a local bridge process to connect to your remote server.
+1. **Open Claude Desktop** → **Settings** → **Connectors**
 
-#### Option A: Using mcp-remote Package (Recommended)
-```json
-{
-  "mcpServers": {
-    "Company Docs": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote@latest",
-        "https://company-docs-mcp.your-subdomain.workers.dev/mcp"
-      ]
-    }
-  }
-}
-```
+2. **Click "Add custom connector"** at the bottom
 
-Replace `your-subdomain` with your actual Cloudflare Workers subdomain from `npm run deploy` output.
+3. **Fill in the connector details:**
+   - **Name**: `Company Docs` (or your preferred name)
+   - **URL**: `https://company-docs-mcp.your-subdomain.workers.dev/mcp`
 
-#### Option B: Using Standalone Client (Most Reliable)
-1. Download the standalone client:
-```bash
-# Copy from the repository
-cp standalone-mcp-client.cjs /path/to/your/preferred/location/
-# Edit the file to update the MCP_SERVER_URL to your deployed URL
-```
+4. **Click "Add"** to save
 
-2. Add to Claude Desktop config:
-```json
-{
-  "mcpServers": {
-    "Company Docs": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/standalone-mcp-client.cjs"
-      ]
-    }
-  }
-}
-```
+**That's it!** The connector will appear in your connectors list with 4 available tools:
+- `search_design_knowledge` - Search your documentation
+- `search_chunks` - Search specific content chunks
+- `browse_by_category` - Browse by category
+- `get_all_tags` - Get all available tags
 
-#### Option C: Local Development Mode
-For local development only (requires `npm run dev` to be running):
-```json
-{
-  "mcpServers": {
-    "company-docs": {
-      "command": "node",
-      "args": ["/absolute/path/to/company-docs-mcp/dist/index.js"],
-      "env": {
-        "SUPABASE_URL": "your-supabase-url",
-        "SUPABASE_ANON_KEY": "your-anon-key"
-      }
-    }
-  }
-}
-```
+**Note:** Replace `your-subdomain` with your actual Cloudflare Workers subdomain from the `npm run deploy` output.
 
-After updating configuration:
-1. Completely quit Claude Desktop
-2. Restart Claude Desktop
-3. Look for "Company Docs" in available MCPs
+**Requirements:** Custom connectors are available for Claude Pro, Team, and Enterprise plans.
 
 ## Deployment
 

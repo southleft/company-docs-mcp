@@ -1,0 +1,34 @@
+name = "company-docs-mcp"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ORGANIZATION_NAME = "Your Organization"
+ORGANIZATION_DOMAIN = "example.com"
+ORGANIZATION_LOGO_URL = ""
+ORGANIZATION_TAGLINE = "Get instant answers from your documentation."
+# Note: These should be set as secrets using: npx wrangler secret put SUPABASE_URL
+# SUPABASE_URL and SUPABASE_ANON_KEY are shown here as examples only
+# In production, remove these and use wrangler secrets instead
+SUPABASE_URL = "https://your-project.supabase.co"
+SUPABASE_ANON_KEY = "your-anon-key-here"
+# OPENAI_API_KEY should NEVER be in this file - use wrangler secrets
+VECTOR_SEARCH_ENABLED = "true"
+VECTOR_SEARCH_MODE = "vector"
+
+[[kv_namespaces]]
+binding = "CONTENT_CACHE"
+id = "your-kv-namespace-id-here"
+
+[ai]
+binding = "AI"
+
+# SECURITY NOTICE:
+# DO NOT commit actual API keys or secrets to version control!
+# Use wrangler secrets for sensitive values:
+#
+# echo "your-key" | npx wrangler secret put OPENAI_API_KEY
+# echo "your-key" | npx wrangler secret put SUPABASE_SERVICE_KEY
+# echo "your-url" | npx wrangler secret put SUPABASE_URL
+# echo "your-key" | npx wrangler secret put SUPABASE_ANON_KEY

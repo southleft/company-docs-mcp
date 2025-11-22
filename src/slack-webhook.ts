@@ -269,12 +269,12 @@ Remember: Your response MUST be extremely long and detailed. Include ALL informa
     // Format response for Slack blocks
     let blocks: SlackBlock[] = [];
     
-    // Header
+    // Header with version for tracking deployments
     blocks.push({
       type: 'header',
       text: {
         type: 'plain_text',
-        text: `📚 ${env.ORGANIZATION_NAME || 'Documentation'}`,
+        text: `📚 ${env.ORGANIZATION_NAME || 'CanvasKit Documentation'}`,
         emoji: true
       }
     });
