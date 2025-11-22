@@ -6,8 +6,6 @@ Transform your organization's documentation into an AI-powered knowledge base. C
 
 > **Latest Updates**: Enhanced Slack integration with comprehensive responses and clickable source links. Now supports dual-environment setup for testing with organization-specific content while maintaining a generic public repository.
 
-![Chat Interface](./docs/assets/chat-ui-preview.png)
-
 ## Features
 
 - 🔍 **Semantic Search**: Vector-based search using OpenAI embeddings for intelligent documentation retrieval
@@ -32,7 +30,7 @@ Transform your organization's documentation into an AI-powered knowledge base. C
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/company-docs-mcp.git
+git clone https://github.com/southleft/company-docs-mcp.git
 cd company-docs-mcp
 
 # Install dependencies
@@ -405,8 +403,7 @@ MIT License - See [LICENSE](LICENSE) file for details
 ## Support
 
 - 📖 [Documentation](docs/)
-- 💬 [GitHub Issues](https://github.com/your-org/company-docs-mcp/issues)
-- 📧 Email: support@yourcompany.com
+- 💬 [GitHub Issues](https://github.com/southleft/company-docs-mcp/issues)
 
 ## Acknowledgments
 

@@ -72,3 +72,10 @@ wrangler.toml
 
 # Keep example only
 !wrangler.toml.example
+
+# Serena AI assistant (local development only)
+.serena/
+
+# Debug and test files
+debug-frontend.html
+test-slack-response.js
