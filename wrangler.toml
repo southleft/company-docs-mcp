@@ -8,14 +8,12 @@ ORGANIZATION_NAME = "Your Organization"
 ORGANIZATION_DOMAIN = "example.com"
 ORGANIZATION_LOGO_URL = ""
 ORGANIZATION_TAGLINE = "Get instant answers from your documentation."
-# SECURITY: DO NOT commit real secrets! Use wrangler secrets instead:
+# SECURITY: All credentials are set as encrypted secrets via:
 # echo "your-url" | npx wrangler secret put SUPABASE_URL
 # echo "your-key" | npx wrangler secret put SUPABASE_ANON_KEY
 # echo "your-key" | npx wrangler secret put SUPABASE_SERVICE_KEY
 # echo "your-key" | npx wrangler secret put OPENAI_API_KEY
-SUPABASE_URL = "https://your-project.supabase.co"
-SUPABASE_ANON_KEY = "your-supabase-anon-key-here"
-# OPENAI_API_KEY removed - set as secret only!
+# echo "your-model" | npx wrangler secret put OPENAI_MODEL
 VECTOR_SEARCH_ENABLED = "true"
 VECTOR_SEARCH_MODE = "vector"
 
