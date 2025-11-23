@@ -46,8 +46,6 @@ The setup wizard will guide you through:
 - Configuring content sources
 - (Optional) Setting up Slack integration
 
-**For Organization-Specific Testing**: See [LOCAL_SETUP.md](LOCAL_SETUP.md) for instructions on setting up a dual-environment configuration that allows testing with your organization's branding while keeping the repository generic.
-
 ### 2. Configure Supabase Database
 
 1. Create a new Supabase project at [supabase.com](https://supabase.com)

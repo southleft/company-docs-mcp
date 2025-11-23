@@ -15,7 +15,7 @@ Before starting, ensure you have:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/company-docs-mcp.git
+git clone https://github.com/southleft/company-docs-mcp.git
 cd company-docs-mcp
 
 # Install dependencies
@@ -283,8 +283,7 @@ Your documentation assistant is now available through:
 ## Need Help?
 
 - 📖 Check our [documentation](./docs/)
-- 🐛 Report [issues on GitHub](https://github.com/your-org/company-docs-mcp/issues)
-- 💬 Join our [Discord community](#)
+- 🐛 Report [issues on GitHub](https://github.com/southleft/company-docs-mcp/issues)
 
 ---
 
