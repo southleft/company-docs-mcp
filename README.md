@@ -151,17 +151,21 @@ npx company-docs publish --dry-run --verbose
 ## How It Works
 
 ```mermaid
-flowchart LR
-    A["Markdown Files\n(your docs/)"] -->|"ingest markdown"| B["content/entries/\n(JSON files)"]
-    B -->|"publish"| C["Supabase\n+ pgvector"]
-    D["OpenAI API"] -.->|"embed"| C
+flowchart TD
+    subgraph ingest ["Ingestion (you run this)"]
+        A["Markdown Files"] -->|"ingest markdown"| B["content/entries/"]
+        B -->|"publish"| C["Supabase + pgvector"]
+        D["OpenAI API"] -.->|"embed"| C
+    end
 
-    E["User asks a question"] --> F["Claude Desktop\nor Slack"]
-    F -->|"MCP protocol"| G["Cloudflare Worker\n(MCP Server)"]
-    G -->|"vector search"| C
-    G -->|"embed query"| D
-    C -->|"matched docs"| G
-    G -->|"results"| F
+    subgraph query ["Query (happens automatically)"]
+        E["User asks a question"] --> F["Claude Desktop / Slack"]
+        F -->|"MCP protocol"| G["Cloudflare Worker"]
+        G -->|"embed query"| D
+        G -->|"vector search"| C
+        C -->|"matched docs"| G
+        G -->|"results"| F
+    end
 
     style A fill:#f9f9f9,stroke:#333
     style B fill:#fff3cd,stroke:#856404
@@ -172,13 +176,13 @@ flowchart LR
     style G fill:#cce5ff,stroke:#004085
 ```
 
-**Left side — you do this once (or whenever docs change):**
+**Ingestion — you run this once (or whenever docs change):**
 
 1. **Parse** — `ingest markdown` reads your files, extracts titles from headings, and chunks content by section
 2. **Store locally** — Parsed entries are saved as JSON in `content/entries/` with deterministic IDs (same file = same ID, no duplicates)
 3. **Publish** — `publish` sends each entry to OpenAI for embedding, then upserts into Supabase. A SHA-256 content hash skips unchanged entries automatically
 
-**Right side — this happens every time someone asks a question:**
+**Query — happens every time someone asks a question:**
 
 1. The query is embedded using the same OpenAI model
 2. Supabase's `pgvector` extension finds the most similar documents via cosine distance
