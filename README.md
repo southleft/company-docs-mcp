@@ -37,7 +37,7 @@ flowchart TD
     A["Your Markdown Files"]
     B["Cloudflare Workers AI"]
     C[("Supabase")]
-    D["Your Team\nClaude, Cursor, Slack, Chat UI"]
+    D["Your Team<br/>Claude, Cursor, Slack, Chat UI"]
     E["Cloudflare Worker"]
 
     A -- "ingest + publish" --> B
