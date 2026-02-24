@@ -234,4 +234,4 @@ If you encounter issues:
 1. Check Worker logs with `npx wrangler tail`.
 2. Verify that `SLACK_SIGNING_SECRET` is set: `npx wrangler secret list`.
 3. Confirm the Worker is running: `curl https://company-docs-mcp.<your-subdomain>.workers.dev/health`.
-4. Open an issue on the [GitHub repository](https://github.com/AcuteClick/company-docs-mcp/issues).
+4. Open an issue on the [GitHub repository](https://github.com/southleft/company-docs-mcp/issues).

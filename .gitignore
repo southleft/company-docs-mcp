@@ -79,3 +79,9 @@ wrangler.toml
 # Debug and test files
 debug-frontend.html
 test-slack-response.js
+
+# Playwright/browser automation artifacts
+.playwright-mcp/
+*.png
+*.jpg
+*.gif

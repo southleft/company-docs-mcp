@@ -10,7 +10,8 @@
 	"files": [
 		"dist/",
 		"database/schema.sql",
-		"README.md"
+		"README.md",
+		"LICENSE"
 	],
 	"scripts": {
 		"deploy": "wrangler deploy",
