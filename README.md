@@ -32,20 +32,37 @@ The rest of this README is for you. Follow the setup guide below to get everythi
 
 The system uses three services. All three offer free tiers that are sufficient for most teams.
 
-```
-YOUR COMPUTER                              CLOUD SERVICES
-─────────────                              ──────────────
-                                         ┌──────────────────┐
-Markdown files ──► CLI tool ────────────►│  Cloudflare       │
-                   (parses &              │  - Hosts server   │
-                    publishes)            │  - AI embeddings  │
-                                         └────────┬─────────┘
-                                                  │
-                                         ┌────────▼─────────┐
-                                         │  Supabase         │
-                                         │  - Stores content │
-                                         │  - Vector search  │
-                                         └──────────────────┘
+```mermaid
+flowchart LR
+    subgraph local ["YOUR COMPUTER"]
+        A["Markdown Files"] --> B["CLI Tool\n(npm package)"]
+    end
+
+    subgraph cloud ["CLOUD SERVICES"]
+        C["Cloudflare\nHosts server\nAI embeddings"]
+        D[("Supabase\nStores content\nVector search")]
+        C --- D
+    end
+
+    B -- "publish" --> C
+    C -- "store vectors" --> D
+
+    subgraph clients ["YOUR TEAM"]
+        E["Claude / Cursor\nSlack / Chat UI"]
+    end
+
+    E -- "ask a question" --> C
+    D -- "search results" --> C
+    C -- "answers" --> E
+
+    style local fill:#f9f9f9,stroke:#333,color:#333
+    style cloud fill:#e8f4f8,stroke:#0369a1,color:#333
+    style clients fill:#f0fdf4,stroke:#15803d,color:#333
+    style A fill:#fff,stroke:#333,color:#333
+    style B fill:#fff3cd,stroke:#856404,color:#333
+    style C fill:#dbeafe,stroke:#1d4ed8,color:#333
+    style D fill:#d4edda,stroke:#155724,color:#333
+    style E fill:#dcfce7,stroke:#15803d,color:#333
 ```
 
 | Service | What it does | Why it's needed |
