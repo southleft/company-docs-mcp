@@ -161,9 +161,10 @@ flowchart TD
 
     E["User Question"] --> F["Claude Desktop / Slack / Chat UI"]
     F -->|MCP protocol| G["Cloudflare Worker"]
-    G -->|embed query| C
-    G -->|vector search| D
-    D -->|matched docs| G
+    G -->|embed query| H["OpenAI Embeddings"]
+    H --> G
+    G -->|vector search| I[("Supabase + pgvector")]
+    I -->|matched docs| G
     G -->|results| F
 
     style A fill:#f9f9f9,stroke:#333,color:#333
@@ -173,6 +174,8 @@ flowchart TD
     style E fill:#f9f9f9,stroke:#333,color:#333
     style F fill:#cce5ff,stroke:#004085,color:#333
     style G fill:#cce5ff,stroke:#004085,color:#333
+    style H fill:#e2e3e5,stroke:#383d41,color:#333
+    style I fill:#d4edda,stroke:#155724,color:#333
 ```
 
 **Ingestion — you run this once (or whenever docs change):**
