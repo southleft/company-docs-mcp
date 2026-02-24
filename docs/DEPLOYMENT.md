@@ -150,7 +150,7 @@ curl -X POST https://company-docs-mcp.<your-subdomain>.workers.dev/search \
 
 **MCP endpoint:**
 
-The MCP protocol endpoint is available at `/mcp`. This is the URL you provide when connecting Claude Desktop or other MCP clients:
+The MCP protocol endpoint is available at `/mcp`. This is the URL you provide when connecting any MCP client:
 
 ```
 https://company-docs-mcp.<your-subdomain>.workers.dev/mcp

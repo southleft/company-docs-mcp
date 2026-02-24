@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Get Company Docs MCP running: ingest your markdown, deploy the MCP server, and connect it to Claude Desktop.
+Get Company Docs MCP running: ingest your markdown, deploy the MCP server, and connect it to your MCP client.
 
 ## Prerequisites
 
@@ -111,14 +111,19 @@ npm run deploy
 
 Your MCP server will be available at `https://company-docs-mcp.<your-subdomain>.workers.dev`.
 
-## 7. Connect Claude Desktop
+## 7. Connect Your MCP Client
 
-1. Open **Claude Desktop** > **Settings** > **Connectors**
-2. Click **Add custom connector**
-3. Set the **URL** to `https://company-docs-mcp.<your-subdomain>.workers.dev/mcp`
-4. Click **Add**
+The MCP endpoint is:
 
-Claude will now have access to these tools:
+```
+https://company-docs-mcp.<your-subdomain>.workers.dev/mcp
+```
+
+**Claude:** Settings > Connectors > Add custom connector > paste the URL.
+
+**Cursor / Windsurf / Other clients:** Add the URL as a remote MCP server in your client's settings.
+
+Your client will now have access to these tools:
 
 | Tool | Description |
 |------|-------------|
@@ -172,10 +177,10 @@ See [docs/SLACK_SETUP.md](docs/SLACK_SETUP.md) for details on local testing and 
 **Embedding errors**
 - Verify your OpenAI API key is valid and has available credits
 
-**Claude Desktop not connecting**
+**MCP client not connecting**
 - Ensure the Worker is deployed and reachable
 - Use the `/mcp` path in the connector URL, not the root
-- Restart Claude Desktop after adding the connector
+- Restart your MCP client after adding the connector
 
 **Slack not responding**
 - Confirm the Request URL in your Slack app points to `https://<your-worker>/slack`

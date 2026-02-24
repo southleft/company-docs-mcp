@@ -1,12 +1,12 @@
 # Company Docs MCP
 
-Turn any documentation into an AI-searchable knowledge base. Ingest markdown files, push them to Supabase with vector embeddings, and query them through Claude Desktop, Slack, or a built-in chat interface — all powered by the [Model Context Protocol](https://modelcontextprotocol.io).
+Turn any documentation into an AI-searchable knowledge base. Ingest markdown files, push them to Supabase with vector embeddings, and query them through any MCP-compatible client, Slack, or a built-in chat interface — all powered by the [Model Context Protocol](https://modelcontextprotocol.io).
 
 ## What This Does
 
 1. **Ingest** — Point the CLI at a folder of markdown files. It parses them into structured content entries.
-2. **Publish** — Push those entries to Supabase with OpenAI embeddings for semantic vector search.
-3. **Query** — Connect the deployed MCP server to Claude Desktop, Slack, or any MCP-compatible client. Ask questions in natural language and get answers sourced from your documentation.
+2. **Publish** — Push those entries to Supabase with vector embeddings for semantic search.
+3. **Query** — Connect the deployed MCP server to any MCP-compatible client (Claude, Cursor, Windsurf, etc.), Slack, or the built-in chat UI. Ask questions in natural language and get answers sourced from your documentation.
 
 This works for any kind of documentation: design systems, engineering guides, HR policies, operations playbooks, product specs, onboarding materials — anything you can write in markdown.
 
@@ -154,14 +154,14 @@ npx company-docs publish --dry-run --verbose
 flowchart TD
     A["Markdown Files"]
     A -->|ingest markdown| B["content/entries/"]
-    B -->|publish| C["OpenAI Embeddings"]
+    B -->|publish| C["Embedding API"]
     C -->|upsert| D[("Supabase + pgvector")]
 
     D ~~~ E
 
-    E["User Question"] --> F["Claude Desktop / Slack / Chat UI"]
+    E["User Question"] --> F["MCP Client / Slack / Chat UI"]
     F -->|MCP protocol| G["Cloudflare Worker"]
-    G -->|embed query| H["OpenAI Embeddings"]
+    G -->|embed query| H["Embedding API"]
     G -->|vector search| I[("Supabase + pgvector")]
     I -->|matched docs| G
     G -->|results| F
@@ -181,17 +181,17 @@ flowchart TD
 
 1. **Parse** — `ingest markdown` reads your files, extracts titles from headings, and chunks content by section
 2. **Store locally** — Parsed entries are saved as JSON in `content/entries/` with deterministic IDs (same file = same ID, no duplicates)
-3. **Publish** — `publish` sends each entry to OpenAI for embedding, then upserts into Supabase. A SHA-256 content hash skips unchanged entries automatically
+3. **Publish** — `publish` sends each entry to the embedding API for vectorization, then upserts into Supabase. A SHA-256 content hash skips unchanged entries automatically
 
 **Query — happens every time someone asks a question:**
 
-1. The query is embedded using the same OpenAI model
+1. The query is embedded using the same model
 2. Supabase's `pgvector` extension finds the most similar documents via cosine distance
-3. Results are returned through the MCP server to Claude Desktop, Slack, or any connected client
+3. Results are returned through the MCP server to your MCP client, Slack, or the chat UI
 
 ## Deploying the MCP Server
 
-The npm package includes the CLI for ingestion. To serve the MCP endpoint that Claude Desktop and other clients connect to, deploy the Cloudflare Worker from the repository:
+The npm package includes the CLI for ingestion. To serve the MCP endpoint that clients connect to, deploy the Cloudflare Worker from the repository:
 
 ### 1. Clone the Repository
 
@@ -247,16 +247,19 @@ npm run deploy
 
 Your MCP server will be available at `https://company-docs-mcp.<your-subdomain>.workers.dev`.
 
-## Connecting to Claude Desktop
+## Connecting an MCP Client
 
-Once the Worker is deployed, add it as a connector in Claude Desktop:
+Once the Worker is deployed, connect it to any MCP-compatible client. The MCP endpoint is:
 
-1. Open **Claude Desktop** → **Settings** → **Connectors**
-2. Click **Add custom connector**
-3. Set the **URL** to `https://company-docs-mcp.<your-subdomain>.workers.dev/mcp`
-4. Click **Add**
+```
+https://company-docs-mcp.<your-subdomain>.workers.dev/mcp
+```
 
-The connector provides these tools:
+**Claude Desktop:** Settings → Connectors → Add custom connector → paste the URL above.
+
+**Cursor / Windsurf / Other MCP clients:** Add the URL as a remote MCP server in your client's settings. Refer to your client's documentation for the specific steps.
+
+The server provides these tools:
 
 | Tool | Description |
 |------|-------------|
@@ -269,7 +272,7 @@ The connector provides these tools:
 
 The system is designed for repeated runs:
 
-- **Content hashing** — Only entries whose content has changed are re-embedded, saving OpenAI API calls
+- **Content hashing** — Only entries whose content has changed are re-embedded, saving API calls
 - **Deterministic IDs** — The same file always produces the same ID, preventing duplicates
 - **Stale cleanup** — Entries removed from your docs directory are automatically cleaned up
 - **Deduplication** — If duplicates exist in the database, older copies are removed during ingestion
@@ -340,10 +343,10 @@ See [docs/BRANDING.md](docs/BRANDING.md) for full branding options.
 - Verify your OpenAI API key is valid and has credits
 - Check network connectivity to the OpenAI API
 
-**Claude Desktop not connecting**
+**MCP client not connecting**
 - Ensure the Worker is deployed and accessible
 - Use the connector URL path `/mcp` (not just the root URL)
-- Restart Claude Desktop after adding the connector
+- Restart your MCP client after adding the connector
 
 ## Security
 

@@ -1,11 +1,12 @@
 # Troubleshooting Remote MCP Connection
 
-## Issue: MCP Not Appearing in Claude Desktop
+## Issue: MCP Not Appearing in Your Client
 
-If your Company Docs MCP isn't showing up in Claude Desktop, follow these steps:
+If your Company Docs MCP isn't showing up in your MCP client, follow these steps:
 
 ### Understanding MCP Connections
-Claude Desktop supports remote MCP servers via its **Connectors** feature (Settings > Connectors > Add custom connector). You can also use a local bridge process for older setups.
+
+MCP (Model Context Protocol) clients connect to remote servers over HTTPS. Most clients support adding a remote MCP server URL directly in their settings. Some older clients may require a local bridge process like `mcp-remote`.
 
 ### 1. Verify Worker is Deployed
 
@@ -21,21 +22,28 @@ npm run deploy
 # Test the MCP endpoint
 curl -X POST https://company-docs-mcp.your-subdomain.workers.dev/mcp \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"1.0.0","capabilities":{}}}' 
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"1.0.0","capabilities":{}}}'
 ```
 
 You should see a JSON response with server information.
 
-### 2. Connect via Claude Desktop Connector (Recommended)
+### 2. Connect Your MCP Client
 
-1. Open **Claude Desktop** > **Settings** > **Connectors**
-2. Click **Add custom connector**
-3. Set the URL to: `https://company-docs-mcp.<your-subdomain>.workers.dev/mcp`
-4. Click **Add**
+Add this URL to your MCP client:
 
-### Alternative: Using mcp-remote (Older Claude Desktop Versions)
+```
+https://company-docs-mcp.<your-subdomain>.workers.dev/mcp
+```
 
-If your Claude Desktop version does not support connectors, use a local bridge:
+**Claude:** Settings > Connectors > Add custom connector > paste the URL.
+
+**Cursor:** Settings > MCP > Add new MCP server > enter the URL.
+
+**Windsurf / Other clients:** Refer to your client's documentation for adding a remote MCP server.
+
+### Alternative: Using mcp-remote (Older Clients)
+
+If your client only supports stdio-based MCP servers, use a local bridge:
 
 ```json
 {
@@ -52,54 +60,43 @@ If your Claude Desktop version does not support connectors, use a local bridge:
 }
 ```
 
-### 3. Configuration File Location
+### 3. Test Your Configuration
 
-Make sure you're editing the correct file:
+Test the MCP endpoint directly before configuring your client:
 
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux**: `~/.config/Claude/claude_desktop_config.json`
-
-### 4. Test Your Configuration
-
-Before adding to Claude Desktop, test your setup:
-
-#### Test mcp-remote:
 ```bash
+# Test with curl
+curl -X POST https://company-docs-mcp.your-subdomain.workers.dev/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+
+# Test with mcp-remote
 npx mcp-remote@latest https://company-docs-mcp.your-subdomain.workers.dev/mcp
 # Press Ctrl+C to exit after confirming connection
 ```
 
-#### Test standalone client:
-```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | \
-  node /path/to/standalone-mcp-client.cjs
-```
-
-### 5. Restart Claude Desktop
+### 4. Restart Your Client
 
 After updating the configuration:
 
-1. **Completely quit Claude Desktop** (not just close the window)
-   - macOS: Cmd+Q or right-click dock icon → Quit
-   - Windows: Right-click system tray icon → Exit
-2. **Restart Claude Desktop**
+1. **Completely quit your MCP client** (not just close the window)
+2. **Restart it**
 3. **Start a new conversation**
-4. **Look for "Company Docs" in available MCPs**
+4. **Look for "Company Docs" in available tools/MCPs**
 
-### 6. Verify in Claude Desktop
+### 5. Verify Tools Are Available
 
-1. Start a new conversation
-2. You should see tools like:
-   - `search_documentation`
-   - `search_chunks`
-   - `browse_by_category`
-   - `get_all_tags`
+You should see these tools:
 
-### 7. Common Issues and Solutions
+- `search_documentation`
+- `search_chunks`
+- `browse_by_category`
+- `get_all_tags`
+
+### 6. Common Issues and Solutions
 
 **Issue: "Unknown MCP" or MCP not listed**
-- If using connectors, verify the URL ends with `/mcp`
+- Verify the URL ends with `/mcp`
 - If using mcp-remote, ensure `"command"` and `"args"` are used (not `"url"`)
 
 **Issue: MCP appears but tools don't work**
@@ -111,29 +108,18 @@ After updating the configuration:
 - If using mcp-remote, it may take a moment to download on first run
 - Try running the npx command manually first to cache it
 
-### 8. Debug with Logs
+### 7. Debug with Logs
 
 Check worker logs:
 ```bash
 npx wrangler tail
 ```
 
-Test the connection manually:
-```bash
-# Test with mcp-remote
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | \
-  npx mcp-remote@latest https://company-docs-mcp.your-subdomain.workers.dev/mcp
-
-# Test with standalone client
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | \
-  node standalone-mcp-client.cjs
-```
-
 ### Important Notes
 
-- The preferred method is **Claude Desktop Connectors** (Settings > Connectors)
 - The remote server must be accessible via HTTPS
-- The `/mcp` endpoint must handle MCP Streamable HTTP protocol
+- The `/mcp` endpoint handles MCP Streamable HTTP protocol
+- Any MCP-compatible client can connect — this is not limited to any specific tool
 
 ### Need More Help?
 
