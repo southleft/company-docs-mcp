@@ -1,6 +1,3 @@
-// Prevent bundled scripts from auto-executing when imported
-process.env.__COMPANY_DOCS_CLI = "1";
-
 declare const __VERSION__: string;
 
 const version = typeof __VERSION__ !== "undefined" ? __VERSION__ : "dev";

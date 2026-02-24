@@ -13,6 +13,7 @@ await build({
 	banner: { js: "#!/usr/bin/env node" },
 	define: {
 		__VERSION__: JSON.stringify(pkg.version),
+		"process.env.__COMPANY_DOCS_CLI": '"1"',
 	},
 	external: [
 		"@supabase/supabase-js",
