@@ -152,32 +152,27 @@ npx company-docs publish --dry-run --verbose
 
 ```mermaid
 flowchart TD
-    subgraph ingest [" Ingestion — you run this "]
-        direction TB
-        A["Markdown Files\n\nyour docs/"] -- ingest markdown --> B["content/entries/\n\nJSON files"]
-        B -- publish --> D["OpenAI API\n\ntext-embedding-3-small"]
-        D -- embed + upsert --> C[("Supabase\n\npgvector")]
-    end
+    A["Markdown Files"]
+    A -->|ingest markdown| B["content/entries/"]
+    B -->|publish| C["OpenAI Embeddings"]
+    C -->|upsert| D[("Supabase + pgvector")]
 
-    subgraph query [" Query — happens automatically "]
-        direction TB
-        E["User asks a question\n\n"] --> F["Claude Desktop · Slack · Chat UI\n\n"]
-        F -- MCP protocol --> G["Cloudflare Worker\n\nMCP Server"]
-        G -- embed query --> H["OpenAI API\n\n"]
-        G -- vector search --> I[("Supabase\n\n")]
-        I -- matched docs --> G
-        G -- results --> F
-    end
+    D ~~~ E
 
-    style A fill:#f9f9f9,stroke:#333
-    style B fill:#fff3cd,stroke:#856404
-    style C fill:#d4edda,stroke:#155724
-    style D fill:#e2e3e5,stroke:#383d41
-    style E fill:#f9f9f9,stroke:#333
-    style F fill:#cce5ff,stroke:#004085
-    style G fill:#cce5ff,stroke:#004085
-    style H fill:#e2e3e5,stroke:#383d41
-    style I fill:#d4edda,stroke:#155724
+    E["User Question"] --> F["Claude Desktop / Slack / Chat UI"]
+    F -->|MCP protocol| G["Cloudflare Worker"]
+    G -->|embed query| C
+    G -->|vector search| D
+    D -->|matched docs| G
+    G -->|results| F
+
+    style A fill:#f9f9f9,stroke:#333,color:#333
+    style B fill:#fff3cd,stroke:#856404,color:#333
+    style C fill:#e2e3e5,stroke:#383d41,color:#333
+    style D fill:#d4edda,stroke:#155724,color:#333
+    style E fill:#f9f9f9,stroke:#333,color:#333
+    style F fill:#cce5ff,stroke:#004085,color:#333
+    style G fill:#cce5ff,stroke:#004085,color:#333
 ```
 
 **Ingestion — you run this once (or whenever docs change):**
