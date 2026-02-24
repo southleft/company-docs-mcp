@@ -13,9 +13,10 @@
 
 import "dotenv/config";
 import { createHash } from "node:crypto";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
-import { loadAllContentEntries } from "../../src/lib/content-loader";
 import type { ContentEntry } from "../../src/lib/content";
 
 // ---------------------------------------------------------------------------
@@ -134,6 +135,37 @@ async function generateEmbedding(text: string, label: string): Promise<number[]>
 	return embedding;
 }
 
+/** Load content entries from content/entries/ directory (Node.js filesystem) */
+async function loadEntriesFromDisk(): Promise<ContentEntry[]> {
+	const entriesDir = path.join(process.cwd(), "content", "entries");
+	const entries: ContentEntry[] = [];
+
+	try {
+		const files = await fs.readdir(entriesDir);
+		const jsonFiles = files.filter((f) => f.endsWith(".json"));
+
+		for (const file of jsonFiles) {
+			try {
+				const raw = await fs.readFile(path.join(entriesDir, file), "utf-8");
+				const entry = JSON.parse(raw) as ContentEntry;
+				if (entry?.id && entry?.title && entry?.content) {
+					entries.push(entry);
+				} else if (FLAG_VERBOSE) {
+					console.log(`  [skip] ${file} — missing required fields`);
+				}
+			} catch (err: any) {
+				console.error(`  [warn] Failed to parse ${file}: ${err.message}`);
+			}
+		}
+	} catch {
+		console.error(`No content/entries/ directory found at ${entriesDir}`);
+		console.error("Run an ingestion command first (e.g., npm run ingest:markdown)");
+		process.exit(1);
+	}
+
+	return entries;
+}
+
 /** Split text into sentence-aware chunks */
 function chunkText(text: string, chunkSize = 1000): string[] {
 	const chunks: string[] = [];
@@ -205,9 +237,9 @@ async function main() {
 		}
 	}
 
-	// 4. Load content from local entries
-	console.log("Loading content entries...");
-	const entries = await loadAllContentEntries();
+	// 4. Load content from local entries (filesystem-based)
+	console.log("Loading content entries from content/entries/...");
+	const entries = await loadEntriesFromDisk();
 	console.log(`Found ${entries.length} entries to evaluate\n`);
 
 	// 5. Determine which entries need processing

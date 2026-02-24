@@ -21,6 +21,7 @@
 		"ingest:url": "tsx scripts/ingest/ingest.ts url",
 		"ingest:markdown": "tsx scripts/ingest/ingest-markdown.ts --",
 		"ingest:web": "tsx scripts/ingest/crawl-website.ts --",
+		"manifest": "tsx scripts/generate-manifest.ts",
 		"ingest:supabase": "tsx scripts/ingest/ingest-supabase.ts",
 		"ingest:fresh": "tsx scripts/ingest/ingest-supabase.ts -- --clear",
 		"ingest:update": "tsx scripts/ingest/ingest-supabase.ts",
