@@ -36,7 +36,7 @@ The system uses three services. All three offer free tiers that are sufficient f
 
 ```mermaid
 flowchart LR
-    A["Your Markdown Files"] -->|"ingest + publish"| B["Cloudflare Workers AI"] -->|"store vectors"| C[("Supabase Database")]
+    A["Your Markdown Files"] -->|"ingest + publish"| B["Cloudflare Workers AI"] -->|"store vectors"| C[("Supabase")]
 
     style A fill:#f9f9f9,stroke:#333,color:#333
     style B fill:#dbeafe,stroke:#1d4ed8,color:#333
@@ -47,7 +47,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    D["Claude, Cursor, Slack, or Chat UI"] -->|"ask a question"| E["Cloudflare Worker"] -->|"vector search"| F[("Supabase Database")]
+    D["Claude, Cursor, Slack, or Chat UI"] -->|"ask a question"| E["Cloudflare Worker"] -->|"vector search"| F[("Supabase")]
     F -->|"matching docs"| E -->|"answers"| D
 
     style D fill:#f0fdf4,stroke:#15803d,color:#333
