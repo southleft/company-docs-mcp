@@ -418,11 +418,11 @@ export function getChatHtml(env: Env): string {
                 addMessage('thinking', 'Analyzing your question and searching the knowledge base...');
 
                 try {
-                    // Add client-side timeout (45 seconds total, matching server timeout)
+                    // Add client-side timeout (60 seconds, higher than 55s server timeout)
                     const controller = new AbortController();
                     const timeoutId = setTimeout(() => {
                         controller.abort();
-                    }, 45000); // 45 second timeout (matching server timeout)
+                    }, 60000); // 60 second timeout (higher than server-side to let server errors reach client)
 
                     const response = await fetch('/ai-chat', {
                         method: 'POST',
@@ -474,7 +474,7 @@ export function getChatHtml(env: Env): string {
 
                     let errorMessage = error.message;
                     if (error.name === 'AbortError' || error.message.includes('aborted')) {
-                        errorMessage = '\\u23f1\\ufe0f Request timed out after 45 seconds. This can happen with complex questions. Try breaking your question into smaller parts or asking something more specific.';
+                        errorMessage = '\\u23f1\\ufe0f Request timed out after 60 seconds. This can happen with complex questions. Try breaking your question into smaller parts or asking something more specific.';
                     } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
                         errorMessage = '\\ud83c\\udf10 Network error. Please check your internet connection and try again.';
                     } else if (error.message.includes('timeout')) {

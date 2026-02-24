@@ -50,8 +50,11 @@ function validateEnv(env: Env): string[] {
   if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
     warnings.push("SUPABASE_URL/SUPABASE_ANON_KEY not set — vector search unavailable");
   }
+  if (!env.OPENAI_API_KEY && !env.AI) {
+    warnings.push("No embedding provider available — set OPENAI_API_KEY or enable Workers AI binding");
+  }
   if (!env.OPENAI_API_KEY) {
-    warnings.push("OPENAI_API_KEY not set — AI chat and vector search unavailable");
+    warnings.push("OPENAI_API_KEY not set — AI chat unavailable (vector search will use Workers AI)");
   }
 
   return warnings;

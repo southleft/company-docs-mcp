@@ -10,6 +10,7 @@
 	"files": [
 		"dist/",
 		"database/schema.sql",
+		"database/migrate-to-workers-ai.sql",
 		"README.md",
 		"LICENSE"
 	],

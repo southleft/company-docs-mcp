@@ -38,7 +38,7 @@ If search returns no results, simply state that the information is not available
 }
 
 export async function handleAiChat(request: Request, env: Env): Promise<Response> {
-  return withTimeout(handleAiChatInternal(request, env), 25000, "AI chat request").catch(
+  return withTimeout(handleAiChatInternal(request, env), 55000, "AI chat request").catch(
     (error) => {
       if (error.message.includes("timed out")) {
         return new Response(
@@ -153,7 +153,7 @@ async function handleAiChatInternal(request: Request, env: Env): Promise<Respons
 
       const finalCompletion = await withTimeout(
         openai.chat.completions.create(finalParams),
-        30000,
+        45000,
         "OpenAI final completion"
       );
 

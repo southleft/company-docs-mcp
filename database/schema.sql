@@ -1,6 +1,19 @@
 -- Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
 
+-- ============================================================================
+-- Embedding Dimension Configuration
+--
+-- Default: 1024 (Workers AI — @cf/baai/bge-large-en-v1.5)
+--
+-- If using OpenAI embeddings (text-embedding-3-small), change all occurrences
+-- of vector(1024) below to vector(1536).
+--
+-- The dimension MUST match the embedding provider configured in your .env file.
+-- Mixing dimensions (e.g. ingesting with Workers AI then querying with OpenAI)
+-- will cause search errors.
+-- ============================================================================
+
 -- Drop existing tables if they exist (for clean setup)
 DROP TABLE IF EXISTS content_chunks CASCADE;
 DROP TABLE IF EXISTS content_entries CASCADE;
@@ -16,7 +29,7 @@ CREATE TABLE content_entries (
   system_name TEXT,
   tags TEXT[],
   confidence TEXT,
-  embedding vector(1536), -- OpenAI text-embedding-3-small dimension
+  embedding vector(1024),
   metadata JSONB,
   content_hash TEXT, -- SHA-256 hash for incremental ingestion
   ingested_at TIMESTAMPTZ DEFAULT NOW(),
@@ -30,18 +43,18 @@ CREATE TABLE content_chunks (
   entry_id TEXT REFERENCES content_entries(id) ON DELETE CASCADE,
   chunk_index INTEGER NOT NULL,
   chunk_text TEXT NOT NULL,
-  embedding vector(1536),
+  embedding vector(1024),
   metadata JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(entry_id, chunk_index)
 );
 
 -- Indexes for performance
-CREATE INDEX idx_entries_embedding ON content_entries 
+CREATE INDEX idx_entries_embedding ON content_entries
   USING hnsw (embedding vector_cosine_ops)
   WITH (m = 16, ef_construction = 64);
 
-CREATE INDEX idx_chunks_embedding ON content_chunks 
+CREATE INDEX idx_chunks_embedding ON content_chunks
   USING hnsw (embedding vector_cosine_ops)
   WITH (m = 16, ef_construction = 64);
 
@@ -53,7 +66,7 @@ CREATE INDEX idx_entries_metadata ON content_entries USING GIN(metadata);
 
 -- Function for hybrid search (vector + full-text)
 CREATE OR REPLACE FUNCTION search_content(
-  query_embedding vector(1536),
+  query_embedding vector(1024),
   query_text TEXT DEFAULT NULL,
   match_threshold FLOAT DEFAULT 0.7,
   match_count INT DEFAULT 10,
@@ -84,7 +97,7 @@ BEGIN
       e.confidence,
       1 - (e.embedding <=> query_embedding) AS similarity
     FROM content_entries e
-    WHERE 
+    WHERE
       (filter_category IS NULL OR e.category = filter_category)
       AND (filter_tags IS NULL OR e.tags && filter_tags)
       AND e.embedding IS NOT NULL
@@ -94,11 +107,11 @@ BEGIN
       e.id,
       ts_rank(e.search_text, plainto_tsquery('english', query_text)) AS text_rank
     FROM content_entries e
-    WHERE 
+    WHERE
       query_text IS NOT NULL
       AND e.search_text @@ plainto_tsquery('english', query_text)
   )
-  SELECT 
+  SELECT
     v.id,
     v.title,
     v.content,
@@ -121,7 +134,7 @@ $$;
 
 -- Function for chunk-level search
 CREATE OR REPLACE FUNCTION search_chunks(
-  query_embedding vector(1536),
+  query_embedding vector(1024),
   match_threshold FLOAT DEFAULT 0.7,
   match_count INT DEFAULT 5
 )
@@ -165,17 +178,17 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  target_embedding vector(1536);
+  target_embedding vector(1024);
 BEGIN
   -- Get the embedding of the target entry
   SELECT embedding INTO target_embedding
   FROM content_entries
   WHERE content_entries.id = target_id;
-  
+
   IF target_embedding IS NULL THEN
     RETURN;
   END IF;
-  
+
   RETURN QUERY
   SELECT
     e.id,
@@ -206,8 +219,8 @@ CREATE OR REPLACE FUNCTION update_search_text()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.search_text := to_tsvector('english',
-    coalesce(NEW.title, '') || ' ' || 
-    coalesce(NEW.content, '') || ' ' || 
+    coalesce(NEW.title, '') || ' ' ||
+    coalesce(NEW.content, '') || ' ' ||
     coalesce(array_to_string(NEW.tags, ' '), '')
   );
   RETURN NEW;
@@ -234,3 +247,15 @@ CREATE TRIGGER update_entries_timestamp
   BEFORE UPDATE ON content_entries
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at();
+
+-- Row Level Security — allow public read access to documentation content
+ALTER TABLE content_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE content_chunks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public read access to content_entries"
+  ON content_entries FOR SELECT
+  USING (true);
+
+CREATE POLICY "Allow public read access to content_chunks"
+  ON content_chunks FOR SELECT
+  USING (true);

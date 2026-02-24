@@ -15,7 +15,11 @@ import {
   SAMPLE_ENTRIES,
 } from "./lib/content-manager";
 import { searchChunksEnhanced as searchChunksLocal } from "./lib/content-manager-enhanced";
-import { searchWithSupabase } from "./lib/search-handler";
+import {
+  searchWithSupabase,
+  getEntriesByCategoryFromSupabase,
+  getAllTagsFromSupabase,
+} from "./lib/search-handler";
 import { formatSourceReference } from "./lib/source-formatter";
 import type { Category, ContentEntry } from "./lib/content";
 
@@ -25,6 +29,7 @@ import type { Category, ContentEntry } from "./lib/content";
 export interface Env {
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
+  EMBEDDING_PROVIDER?: string;
   SUPABASE_URL?: string;
   SUPABASE_SERVICE_KEY?: string;
   SUPABASE_ANON_KEY?: string;
@@ -42,7 +47,7 @@ export interface Env {
   SLACK_SIGNING_SECRET?: string;
   SLACK_SLASH_COMMAND?: string;
   CONTENT_CACHE?: any;
-  AI?: any;
+  AI?: any; // Cloudflare Workers AI binding
   [key: string]: unknown;
 }
 
@@ -162,9 +167,9 @@ export function registerTools(server: McpServer, env: Env): void {
     {
       query: z.string().describe("Search query for finding relevant documentation"),
       category: z
-        .enum(["components", "tokens", "patterns", "guidelines", "tools", "general"])
+        .string()
         .optional()
-        .describe("Filter by category"),
+        .describe("Filter by category (e.g. components, documentation, guidelines)"),
       tags: z.array(z.string()).optional().describe("Filter by specific tags"),
       limit: z
         .number()
@@ -224,12 +229,18 @@ export function registerTools(server: McpServer, env: Env): void {
     "Browse all entries in a specific category",
     {
       category: z
-        .enum(["components", "tokens", "patterns", "guidelines", "tools", "general"])
-        .describe("Category to browse"),
+        .string()
+        .describe("Category to browse (use get_all_tags or search to discover available categories)"),
     },
     async ({ category }) => {
-      await ensureContentLoaded();
-      const entries = getEntriesByCategory(category as Category);
+      // Try Supabase first, fall back to local content-manager
+      let entries: ContentEntry[];
+      try {
+        entries = await getEntriesByCategoryFromSupabase(category, env);
+      } catch {
+        await ensureContentLoaded();
+        entries = getEntriesByCategory(category as Category);
+      }
 
       if (entries.length === 0) {
         return {
@@ -257,14 +268,20 @@ export function registerTools(server: McpServer, env: Env): void {
 
   // Tool 4: List all tags
   server.tool("get_all_tags", "Get a list of all available tags in the knowledge base", {}, async () => {
-    await ensureContentLoaded();
-    const tags = getAllTags().sort();
+    // Try Supabase first, fall back to local content-manager
+    let tagList: string[];
+    try {
+      tagList = await getAllTagsFromSupabase(env);
+    } catch {
+      await ensureContentLoaded();
+      tagList = getAllTags().sort();
+    }
 
     return {
       content: [
         {
           type: "text" as const,
-          text: `**Available Tags** (${tags.length} total):\n\n${tags.map((t) => `• ${t}`).join("\n")}`,
+          text: `**Available Tags** (${tagList.length} total):\n\n${tagList.map((t) => `• ${t}`).join("\n")}`,
         },
       ],
     };
@@ -345,14 +362,24 @@ export async function executeTool(
     }
 
     case "browse_by_category": {
-      const entries = getEntriesByCategory(String(args.category || "general") as Category);
+      let entries: ContentEntry[];
+      try {
+        entries = await getEntriesByCategoryFromSupabase(String(args.category || "general"), env);
+      } catch {
+        entries = getEntriesByCategory(String(args.category || "general") as Category);
+      }
       if (entries.length === 0) return `No entries found in category: ${args.category}`;
       return entries.map((e) => `**${e.title}**\nTags: ${e.metadata.tags.join(", ")}`).join("\n\n");
     }
 
     case "get_all_tags": {
-      const tags = getAllTags();
-      return `Available tags (${tags.length}): ${tags.join(", ")}`;
+      let tagList: string[];
+      try {
+        tagList = await getAllTagsFromSupabase(env);
+      } catch {
+        tagList = getAllTags();
+      }
+      return `Available tags (${tagList.length}): ${tagList.join(", ")}`;
     }
 
     default:

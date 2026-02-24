@@ -16,8 +16,12 @@ pnpm-lock.yaml
 # Build outputs
 dist/
 build/
+.tmp-build/
 .wrangler/
 .mf/
+
+# Supabase CLI (project-specific migration history)
+supabase/
 
 # IDE
 .vscode/

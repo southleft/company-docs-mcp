@@ -16,11 +16,15 @@ SUPABASE_ANON_KEY = "your-anon-key-here"
 # OPENAI_API_KEY should NEVER be in this file - use wrangler secrets
 VECTOR_SEARCH_ENABLED = "true"
 VECTOR_SEARCH_MODE = "vector"
+# Embedding provider: "workers-ai" (default) or "openai"
+# Workers AI uses the built-in AI binding below — no API key needed
+# EMBEDDING_PROVIDER = "workers-ai"
 
 [[kv_namespaces]]
 binding = "CONTENT_CACHE"
 id = "your-kv-namespace-id-here"
 
+# Cloudflare Workers AI binding — provides in-network embeddings and chat fallback
 [ai]
 binding = "AI"
 

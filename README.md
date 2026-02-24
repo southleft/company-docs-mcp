@@ -10,50 +10,103 @@ Turn any documentation into an AI-searchable knowledge base. Ingest markdown fil
 
 This works for any kind of documentation: design systems, engineering guides, HR policies, operations playbooks, product specs, onboarding materials — anything you can write in markdown.
 
+## Architecture
+
+The system has three components that work together:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ YOUR MACHINE (setup + ingestion)                                │
+│                                                                 │
+│  Markdown files ──► CLI ──► Cloudflare Workers AI ──► Supabase  │
+│                     (npm package)   (REST API)      (pgvector)  │
+└─────────────────────────────────────────────────────────────────┘
+                                                          │
+┌─────────────────────────────────────────────────────────────────┐
+│ CLOUDFLARE (always running)                              │      │
+│                                                          ▼      │
+│  MCP Client ──► Cloudflare Worker ──► Workers AI ──► Supabase   │
+│  Slack             (your server)    (env.AI binding)  (search)  │
+│  Chat UI                                                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+| Component | What it does | Why you need it |
+|-----------|-------------|-----------------|
+| **Cloudflare Workers** | Hosts your MCP server and generates embeddings via Workers AI | This is where your server runs. Workers AI provides free, fast embedding generation with zero additional API keys. |
+| **Supabase** | Stores your documentation as vectors in a PostgreSQL database with pgvector | Enables semantic search — "find docs about deployment" matches content about CI/CD, releases, and shipping, not just the word "deployment." |
+| **npm package** | CLI tool that parses markdown and publishes to Supabase | You run this on your machine to ingest and update content. |
+
+**No third-party AI API keys are required for search.** The Cloudflare Worker uses its built-in Workers AI binding for embeddings at query time (zero latency, zero cost). The CLI uses the Cloudflare REST API for embeddings during ingestion (same Cloudflare account you already use for hosting).
+
 ## Requirements
 
 - **Node.js 18+** ([download](https://nodejs.org/))
-- **Supabase account** — free tier works ([supabase.com](https://supabase.com))
-- **OpenAI API key** — for generating embeddings ([platform.openai.com](https://platform.openai.com/api-keys))
-- **Cloudflare account** — for deploying the MCP server (optional for local dev)
+- **Cloudflare account** — for hosting the Worker and generating embeddings ([sign up](https://dash.cloudflare.com/sign-up), free tier works)
+- **Supabase account** — for the vector database ([supabase.com](https://supabase.com), free tier works)
 
-## Install
+That's it. No OpenAI, no Anthropic, no Google API keys needed.
+
+## Setup Guide
+
+The steps below walk through the complete setup in dependency order — each step builds on the previous one.
+
+### Step 1: Install the Package
 
 ```bash
 npm install company-docs-mcp
 ```
 
-Or with other package managers:
+**What this does:** Downloads the CLI tool and its dependencies to your project. No external services are contacted yet.
 
-```bash
-pnpm add company-docs-mcp
-yarn add company-docs-mcp
-```
+### Step 2: Create a Supabase Project
 
-## Quick Start
-
-### 1. Set Up Supabase
-
-Create a Supabase project and run the schema SQL to create the required tables:
+Your documentation needs a database to store content and vector embeddings for search.
 
 1. Go to [supabase.com](https://supabase.com) and create a new project
-2. Navigate to **Settings → API** and copy your **Project URL**, **anon key**, and **service_role key**
-3. Open the **SQL Editor**, paste the contents of [`database/schema.sql`](database/schema.sql), and run it
+2. Navigate to **Settings > API** and copy three values:
+   - **Project URL** (e.g., `https://abc123.supabase.co`)
+   - **anon key** (public, used by the Worker for read access)
+   - **service_role key** (private, used for ingestion writes)
+3. Open the **SQL Editor**, paste the contents of [`database/schema.sql`](database/schema.sql), and click **Run**
 
-The schema file is included in the npm package at `node_modules/company-docs-mcp/database/schema.sql`.
+**What this does:** Creates the `content_entries` and `content_chunks` tables with pgvector columns, HNSW indexes for fast similarity search, and the search functions the Worker calls at query time.
 
-### 2. Configure Environment
+> The schema file is included in the npm package at `node_modules/company-docs-mcp/database/schema.sql`.
+
+### Step 3: Set Up Cloudflare Credentials
+
+The CLI needs Cloudflare credentials to generate embeddings during ingestion. These are the same credentials you'll use to deploy the Worker later.
+
+1. Log in to [dash.cloudflare.com](https://dash.cloudflare.com)
+2. Copy your **Account ID** from the right sidebar of the overview page
+3. Go to **My Profile > API Tokens > Create Token**
+4. Use the **"Custom token"** template with these permissions:
+   - **Account > Workers AI > Read** (for embedding generation)
+   - **Account > Workers Scripts > Edit** (for deploying the Worker later)
+   - **Account > Workers KV Storage > Edit** (for the search cache)
+5. Copy the generated token
+
+**What this does:** Gives the CLI permission to call Workers AI for embedding generation, and gives Wrangler permission to deploy and manage your Worker.
+
+### Step 4: Configure Environment
 
 Create a `.env` file in your project root:
 
 ```env
+# Supabase — where your documentation vectors are stored
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_KEY=eyJ...
-OPENAI_API_KEY=sk-...
+
+# Cloudflare — for generating embeddings during ingestion
+CLOUDFLARE_ACCOUNT_ID=your-account-id
+CLOUDFLARE_API_TOKEN=your-api-token
 ```
 
-### 3. Write Your Documentation
+**What this does:** Connects the CLI to your Supabase database and Cloudflare account. The CLI reads these values when you run `publish`.
+
+### Step 5: Write Your Documentation
 
 Create markdown files in a directory. Any structure works:
 
@@ -73,27 +126,163 @@ docs/
     └── release-process.md
 ```
 
-### 4. Ingest and Publish
+### Step 6: Ingest and Publish
 
 ```bash
-# Step 1: Parse markdown files into structured entries
+# Parse markdown files into structured entries
 npx company-docs ingest markdown --dir=./docs
 
-# Step 2: Push to Supabase with vector embeddings
+# Push entries to Supabase with Workers AI embeddings
 npx company-docs publish
 ```
 
-That's it. Your documentation is now searchable via vector similarity.
+**What this does:**
+1. `ingest markdown` reads your files, extracts titles from headings, and chunks content by section. Parsed entries are saved as JSON in `content/entries/`.
+2. `publish` sends each entry to Cloudflare Workers AI for vectorization (1024-dimension embeddings), then upserts the content and vectors into Supabase. A SHA-256 content hash skips unchanged entries automatically.
 
-### 5. Verify
-
-Preview what would be published without writing to the database:
+To preview what would be published without writing to the database:
 
 ```bash
-npx company-docs ingest supabase --dry-run
+npx company-docs publish --dry-run
 ```
 
-Re-run the pipeline any time you update your docs. The system uses content hashing — only changed entries are re-embedded and updated.
+### Step 7: Deploy the Cloudflare Worker
+
+The Worker is the always-running server that handles search queries from MCP clients, Slack, and the chat UI. Deploy it from the cloned repository:
+
+```bash
+git clone https://github.com/southleft/company-docs-mcp.git
+cd company-docs-mcp
+npm install
+```
+
+#### Authenticate Wrangler
+
+```bash
+npx wrangler login
+```
+
+This opens a browser window for Cloudflare OAuth. Once complete, Wrangler can deploy to your account.
+
+> **Important:** If you have a `CLOUDFLARE_API_TOKEN` set in your shell environment or `.env`, it can conflict with `wrangler login`. Comment it out before running `wrangler login`, then restore it after.
+
+#### Configure wrangler.toml
+
+```toml
+name = "company-docs-mcp"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Workers AI binding — gives the Worker direct access to embedding models
+# No API key needed at runtime; this is a built-in Cloudflare service
+[ai]
+binding = "AI"
+
+[vars]
+ORGANIZATION_NAME = "Your Organization"
+VECTOR_SEARCH_ENABLED = "true"
+VECTOR_SEARCH_MODE = "vector"
+```
+
+#### Create a KV namespace
+
+The Worker caches search results in Cloudflare KV to reduce repeated database calls (5-minute TTL, automatically expires).
+
+```bash
+npx wrangler kv namespace create CONTENT_CACHE
+```
+
+Add the returned ID to your `wrangler.toml`:
+
+```toml
+[[kv_namespaces]]
+binding = "CONTENT_CACHE"
+id = "your-kv-namespace-id"
+```
+
+#### Set secrets
+
+Secrets are encrypted and only available to your Worker at runtime. They never appear in `wrangler.toml` or the dashboard in plain text.
+
+```bash
+# Required — connects the Worker to your Supabase database
+echo "your-supabase-url" | npx wrangler secret put SUPABASE_URL
+echo "your-anon-key" | npx wrangler secret put SUPABASE_ANON_KEY
+echo "your-service-key" | npx wrangler secret put SUPABASE_SERVICE_KEY
+```
+
+OpenAI is not required for search — the Worker uses its built-in Workers AI binding.
+
+#### Deploy
+
+```bash
+npm run deploy
+```
+
+Your MCP server is now live at `https://company-docs-mcp.<your-subdomain>.workers.dev`.
+
+### Step 8: Connect Your MCP Client
+
+The MCP endpoint is:
+
+```
+https://company-docs-mcp.<your-subdomain>.workers.dev/mcp
+```
+
+**Claude:** Settings > Connectors > Add custom connector > paste the URL.
+
+**Cursor / Windsurf / Other clients:** Add the URL as a remote MCP server in your client's settings.
+
+The server provides these tools (all query Supabase directly):
+
+| Tool | Description |
+|------|-------------|
+| `search_documentation` | Semantic vector search across all documentation |
+| `search_chunks` | Search specific content chunks with section context |
+| `browse_by_category` | Browse documentation by category (categories are dynamic — whatever you use during ingestion) |
+| `get_all_tags` | List all available tags across your documentation |
+
+## How It Works
+
+```mermaid
+flowchart TD
+    A["Markdown Files"]
+    A -->|ingest markdown| B["content/entries/"]
+    B -->|publish| C["Workers AI"]
+    C -->|upsert| D[("Supabase + pgvector")]
+
+    D ~~~ E
+
+    E["User Question"] --> F["MCP Client / Slack / Chat UI"]
+    F -->|MCP protocol| G["Cloudflare Worker"]
+    G -->|embed query via env.AI| H["Workers AI"]
+    G -->|vector search| I[("Supabase + pgvector")]
+    I -->|matched docs| G
+    G -->|results| F
+
+    style A fill:#f9f9f9,stroke:#333,color:#333
+    style B fill:#fff3cd,stroke:#856404,color:#333
+    style C fill:#e2e3e5,stroke:#383d41,color:#333
+    style D fill:#d4edda,stroke:#155724,color:#333
+    style E fill:#f9f9f9,stroke:#333,color:#333
+    style F fill:#cce5ff,stroke:#004085,color:#333
+    style G fill:#cce5ff,stroke:#004085,color:#333
+    style H fill:#e2e3e5,stroke:#383d41,color:#333
+    style I fill:#d4edda,stroke:#155724,color:#333
+```
+
+**Ingestion (you run this once, or whenever docs change):**
+
+1. **Parse** — `ingest markdown` reads your files, extracts titles from headings, and chunks content by section
+2. **Store locally** — Parsed entries are saved as JSON in `content/entries/` with deterministic IDs (same file = same ID, no duplicates)
+3. **Publish** — `publish` sends each entry to Workers AI for vectorization, then upserts into Supabase. A SHA-256 content hash skips unchanged entries automatically
+
+**Query (happens every time someone asks a question):**
+
+1. The query is embedded using Workers AI via the Worker's built-in `env.AI` binding (zero latency, no API key)
+2. Supabase's `pgvector` extension finds the most similar documents via cosine distance
+3. Results are returned through the MCP server to your MCP client, Slack, or the chat UI
 
 ## CLI Reference
 
@@ -148,126 +337,6 @@ npx company-docs publish --clear
 npx company-docs publish --dry-run --verbose
 ```
 
-## How It Works
-
-```mermaid
-flowchart TD
-    A["Markdown Files"]
-    A -->|ingest markdown| B["content/entries/"]
-    B -->|publish| C["Embedding API"]
-    C -->|upsert| D[("Supabase + pgvector")]
-
-    D ~~~ E
-
-    E["User Question"] --> F["MCP Client / Slack / Chat UI"]
-    F -->|MCP protocol| G["Cloudflare Worker"]
-    G -->|embed query| H["Embedding API"]
-    G -->|vector search| I[("Supabase + pgvector")]
-    I -->|matched docs| G
-    G -->|results| F
-
-    style A fill:#f9f9f9,stroke:#333,color:#333
-    style B fill:#fff3cd,stroke:#856404,color:#333
-    style C fill:#e2e3e5,stroke:#383d41,color:#333
-    style D fill:#d4edda,stroke:#155724,color:#333
-    style E fill:#f9f9f9,stroke:#333,color:#333
-    style F fill:#cce5ff,stroke:#004085,color:#333
-    style G fill:#cce5ff,stroke:#004085,color:#333
-    style H fill:#e2e3e5,stroke:#383d41,color:#333
-    style I fill:#d4edda,stroke:#155724,color:#333
-```
-
-**Ingestion — you run this once (or whenever docs change):**
-
-1. **Parse** — `ingest markdown` reads your files, extracts titles from headings, and chunks content by section
-2. **Store locally** — Parsed entries are saved as JSON in `content/entries/` with deterministic IDs (same file = same ID, no duplicates)
-3. **Publish** — `publish` sends each entry to the embedding API for vectorization, then upserts into Supabase. A SHA-256 content hash skips unchanged entries automatically
-
-**Query — happens every time someone asks a question:**
-
-1. The query is embedded using the same model
-2. Supabase's `pgvector` extension finds the most similar documents via cosine distance
-3. Results are returned through the MCP server to your MCP client, Slack, or the chat UI
-
-## Deploying the MCP Server
-
-The npm package includes the CLI for ingestion. To serve the MCP endpoint that clients connect to, deploy the Cloudflare Worker from the repository:
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/southleft/company-docs-mcp.git
-cd company-docs-mcp
-npm install
-```
-
-### 2. Configure Cloudflare
-
-Create a `wrangler.toml`:
-
-```toml
-name = "company-docs-mcp"
-main = "src/index.ts"
-compatibility_date = "2024-01-01"
-compatibility_flags = ["nodejs_compat"]
-
-[ai]
-binding = "AI"
-
-[vars]
-ORGANIZATION_NAME = "Your Organization"
-VECTOR_SEARCH_ENABLED = "true"
-VECTOR_SEARCH_MODE = "vector"
-```
-
-Create a KV namespace for caching:
-
-```bash
-npx wrangler kv namespace create CONTENT_CACHE
-# Add the returned ID to your wrangler.toml:
-# [[kv_namespaces]]
-# binding = "CONTENT_CACHE"
-# id = "your-kv-namespace-id"
-```
-
-Set secrets:
-
-```bash
-echo "your-openai-api-key" | npx wrangler secret put OPENAI_API_KEY
-echo "your-supabase-url" | npx wrangler secret put SUPABASE_URL
-echo "your-anon-key" | npx wrangler secret put SUPABASE_ANON_KEY
-echo "your-service-key" | npx wrangler secret put SUPABASE_SERVICE_KEY
-```
-
-### 3. Deploy
-
-```bash
-npm run deploy
-```
-
-Your MCP server will be available at `https://company-docs-mcp.<your-subdomain>.workers.dev`.
-
-## Connecting an MCP Client
-
-Once the Worker is deployed, connect it to any MCP-compatible client. The MCP endpoint is:
-
-```
-https://company-docs-mcp.<your-subdomain>.workers.dev/mcp
-```
-
-**Claude Desktop:** Settings → Connectors → Add custom connector → paste the URL above.
-
-**Cursor / Windsurf / Other MCP clients:** Add the URL as a remote MCP server in your client's settings. Refer to your client's documentation for the specific steps.
-
-The server provides these tools:
-
-| Tool | Description |
-|------|-------------|
-| `search_documentation` | Semantic search across all documentation |
-| `search_chunks` | Search specific content chunks |
-| `browse_by_category` | Browse documentation by category |
-| `get_all_tags` | List all available tags |
-
 ## Incremental Updates
 
 The system is designed for repeated runs:
@@ -311,13 +380,18 @@ The MCP server includes a Slack slash command that lets team members query docum
 /docs how to set up staging
 ```
 
-Responses use a three-tier AI strategy for reliability: OpenAI (primary) → Cloudflare Workers AI (fallback) → formatted raw content. Results are automatically formatted for Slack with proper mrkdwn, bullet lists, and code blocks.
-
 See [docs/SLACK_SETUP.md](docs/SLACK_SETUP.md) for setup instructions.
 
 ## Optional: Chat Interface
 
-The deployed Worker serves a branded chat UI at its root URL. Customize it with environment variables:
+The deployed Worker serves a branded chat UI at its root URL. The chat UI has two modes:
+
+- **Search mode** — uses Workers AI embeddings to find relevant documentation. No OpenAI key needed.
+- **AI chat mode** — sends a question to OpenAI GPT-4o, which searches your docs and synthesizes a conversational answer. Requires `OPENAI_API_KEY` set as a Worker secret.
+
+Search, MCP tools, and Slack all work without OpenAI. The AI chat mode is the only feature that uses it.
+
+Customize the UI with environment variables:
 
 ```toml
 [vars]
@@ -327,6 +401,22 @@ ORGANIZATION_TAGLINE = "Ask anything about our documentation"
 ```
 
 See [docs/BRANDING.md](docs/BRANDING.md) for full branding options.
+
+## Optional: OpenAI Embeddings
+
+If you prefer OpenAI embeddings over Workers AI, set `OPENAI_API_KEY` in your `.env`:
+
+```env
+OPENAI_API_KEY=sk-...
+EMBEDDING_PROVIDER=openai
+```
+
+| Provider | Model | Dimensions | When to use |
+|----------|-------|------------|-------------|
+| **Workers AI** (default) | `@cf/baai/bge-large-en-v1.5` | 1024 | Default. No extra API keys. Free on Cloudflare. |
+| **OpenAI** | `text-embedding-3-small` | 1536 | If your organization already standardizes on OpenAI. |
+
+**Important:** The embedding provider must match the database schema dimensions. The default `schema.sql` uses 1024 (Workers AI). If using OpenAI, change all `vector(1024)` to `vector(1536)` in the schema before running it. Switching providers on an existing database requires running the migration in `database/migrate-to-workers-ai.sql` and re-ingesting all content.
 
 ## Troubleshooting
 
@@ -339,9 +429,14 @@ See [docs/BRANDING.md](docs/BRANDING.md) for full branding options.
 - Re-run `npx company-docs ingest markdown` — stale entries are cleaned automatically
 - Run `npx company-docs publish` — database duplicates are removed during ingestion
 
-**Embedding errors**
-- Verify your OpenAI API key is valid and has credits
-- Check network connectivity to the OpenAI API
+**Embedding errors during publish**
+- Verify `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are set in `.env`
+- Test your token: `curl -H "Authorization: Bearer YOUR_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify`
+- If using OpenAI: verify your API key is valid and has credits
+
+**Wrangler login conflicts**
+- If `npx wrangler login` fails, check for a `CLOUDFLARE_API_TOKEN` in your environment that may conflict with OAuth
+- Comment out the token, run `wrangler login`, then restore it
 
 **MCP client not connecting**
 - Ensure the Worker is deployed and accessible

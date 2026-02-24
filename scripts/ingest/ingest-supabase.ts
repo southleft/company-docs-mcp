@@ -2,8 +2,14 @@
 /**
  * Ingest content entries into Supabase with vector embeddings.
  *
- * Default behavior is incremental upsert — only entries whose content has
- * changed (based on a SHA-256 hash) are re-embedded and updated.
+ * Supports two embedding providers:
+ *   - workers-ai (default) — Cloudflare Workers AI via REST API
+ *   - openai               — OpenAI text-embedding-3-small
+ *
+ * Provider detection:
+ *   1. Explicit EMBEDDING_PROVIDER env var
+ *   2. If OPENAI_API_KEY is set → "openai" (backward compatibility)
+ *   3. Default → "workers-ai" (requires CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)
  *
  * Usage:
  *   npm run ingest:supabase              # incremental upsert
@@ -15,16 +21,19 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { createClient } from "@supabase/supabase-js";
-import OpenAI from "openai";
 import type { ContentEntry } from "../../src/lib/content";
+import {
+	detectProvider,
+	embedWithWorkersAIRest,
+	embedWithOpenAI,
+	PROVIDER_CONFIG,
+	type EmbeddingProvider,
+} from "../../src/lib/embedding-provider";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const EMBEDDING_MODEL = "text-embedding-3-small";
-const EMBEDDING_DIM = 1536;
-const MAX_EMBEDDING_INPUT = 8191;
 const BATCH_SIZE = 5;
 const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 1000;
@@ -92,22 +101,51 @@ Options:
   --verbose    Show detailed per-entry progress
   --help       Show this help message
 
+Embedding providers:
+  Workers AI (default)  Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN
+  OpenAI                Set OPENAI_API_KEY
+
+Provider is auto-detected from your .env file. Set EMBEDDING_PROVIDER
+to "workers-ai" or "openai" to override auto-detection.
+
 By default the script performs an incremental upsert — only entries whose
 content has changed since the last ingestion are re-embedded and uploaded.
 `);
 		process.exit(0);
 	}
 
-	// Init clients
+	// Detect embedding provider
+	const provider = detectProvider(process.env as any);
+	const config = PROVIDER_CONFIG[provider];
+
+	console.log(`Embedding provider: ${provider} (${config.model}, ${config.dimensions} dimensions)`);
+
+	// Validate provider-specific env vars
+	let cloudflareAccountId = "";
+	let cloudflareApiToken = "";
+
+	if (provider === "workers-ai") {
+		cloudflareAccountId = requireEnv("CLOUDFLARE_ACCOUNT_ID");
+		cloudflareApiToken = requireEnv("CLOUDFLARE_API_TOKEN");
+	} else {
+		requireEnv("OPENAI_API_KEY");
+	}
+
+	// Init Supabase client
 	const SUPABASE_URL = requireEnv("SUPABASE_URL");
 	const SUPABASE_KEY =
 		process.env.SUPABASE_SERVICE_KEY || requireEnv("SUPABASE_ANON_KEY");
-	const OPENAI_API_KEY = requireEnv("OPENAI_API_KEY");
 
 	const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-	const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-	// -- Helpers that close over openai / FLAG_VERBOSE -----------------------
+	// -- OpenAI client (only when using OpenAI provider) ----------------------
+	let openaiApiKey = "";
+	if (provider === "openai") {
+		const OpenAI = (await import("openai")).default;
+		openaiApiKey = process.env.OPENAI_API_KEY!;
+	}
+
+	// -- Helpers that close over provider config / FLAG_VERBOSE ----------------
 
 	async function withRetry<T>(
 		fn: () => Promise<T>,
@@ -139,20 +177,12 @@ content has changed since the last ingestion are re-embedded and uploaded.
 	}
 
 	async function generateEmbedding(text: string, label: string): Promise<number[]> {
-		const input = text.slice(0, MAX_EMBEDDING_INPUT);
-		const response = await withRetry(
-			() => openai.embeddings.create({ model: EMBEDDING_MODEL, input }),
-			label,
-		);
-		const embedding = response.data[0].embedding;
-
-		if (embedding.length !== EMBEDDING_DIM) {
-			throw new Error(
-				`Embedding for "${label}" has ${embedding.length} dimensions (expected ${EMBEDDING_DIM})`,
-			);
-		}
-
-		return embedding;
+		return withRetry(async () => {
+			if (provider === "workers-ai") {
+				return embedWithWorkersAIRest(text, cloudflareAccountId, cloudflareApiToken);
+			}
+			return embedWithOpenAI(text, openaiApiKey);
+		}, label);
 	}
 
 	async function loadEntriesFromDisk(): Promise<ContentEntry[]> {
@@ -319,6 +349,7 @@ content has changed since the last ingestion are re-embedded and uploaded.
 			0,
 		);
 		console.log(`\n[dry-run] Estimated embedding API calls: ${embeddings}`);
+		console.log(`[dry-run] Provider: ${provider} (${config.model})`);
 		return;
 	}
 
@@ -411,6 +442,7 @@ content has changed since the last ingestion are re-embedded and uploaded.
 
 	// 7. Summary
 	console.log("\nResults:");
+	console.log(`  Provider: ${provider} (${config.model})`);
 	console.log(`  Processed: ${successful}`);
 	console.log(`  Skipped (unchanged): ${skipped}`);
 	console.log(`  Failed: ${failed}`);

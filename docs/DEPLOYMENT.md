@@ -2,14 +2,14 @@
 
 This guide covers deploying the Company Docs MCP server to Cloudflare Workers, the only supported deployment target.
 
-The MCP server runs as a Cloudflare Worker that handles search queries, MCP protocol requests, Slack slash commands, and a built-in chat UI. It connects to Supabase for vector search and uses OpenAI (with optional Cloudflare Workers AI fallback) for embeddings and chat.
+The MCP server runs as a Cloudflare Worker that handles search queries, MCP protocol requests, Slack slash commands, and a built-in chat UI. It connects to Supabase for vector search and uses Cloudflare Workers AI for embeddings. OpenAI is optional — only needed if you prefer OpenAI embeddings or want the AI-powered chat feature.
 
 ## Prerequisites
 
 - **Cloudflare account** -- free tier works ([dash.cloudflare.com](https://dash.cloudflare.com))
 - **Wrangler CLI** -- installed globally or used via `npx`
 - **Supabase project** -- with the schema from `database/schema.sql` applied (see the [README](../README.md) for setup)
-- **OpenAI API key** -- for embeddings and AI chat
+- **OpenAI API key** (optional) -- only needed if using OpenAI embeddings or the AI chat feature; Workers AI is used by default
 - **Node.js 18+** -- for local development and the Wrangler CLI
 
 Authenticate Wrangler before proceeding:
@@ -36,7 +36,7 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Cloudflare Workers AI binding (used as fallback when OpenAI is unavailable)
+# Workers AI binding — provides free embedding generation at query time (no API key needed)
 [ai]
 binding = "AI"
 
@@ -59,7 +59,7 @@ id = "<your-kv-namespace-id>"
 
 ## Step 3: Create the KV Namespace
 
-The Worker uses a KV namespace to cache search results for 5 minutes, reducing repeated calls to Supabase and OpenAI.
+The Worker uses a KV namespace to cache search results for 5 minutes, reducing repeated calls to Supabase.
 
 ```bash
 npx wrangler kv namespace create CONTENT_CACHE
@@ -81,7 +81,6 @@ Secrets are encrypted and only available to your Worker at runtime. They never a
 **Required secrets:**
 
 ```bash
-echo "sk-your-openai-api-key" | npx wrangler secret put OPENAI_API_KEY
 echo "https://your-project.supabase.co" | npx wrangler secret put SUPABASE_URL
 echo "your-service-role-key" | npx wrangler secret put SUPABASE_SERVICE_KEY
 echo "your-anon-key" | npx wrangler secret put SUPABASE_ANON_KEY
@@ -90,12 +89,17 @@ echo "your-anon-key" | npx wrangler secret put SUPABASE_ANON_KEY
 **Optional secrets:**
 
 ```bash
+# Only needed if using OpenAI embeddings instead of Workers AI, or for AI chat
+echo "sk-your-openai-api-key" | npx wrangler secret put OPENAI_API_KEY
+
 # Only needed if you use Slack integration
 echo "your-slack-signing-secret" | npx wrangler secret put SLACK_SIGNING_SECRET
 
 # Override the default OpenAI model (defaults to gpt-4o)
 echo "gpt-4o-mini" | npx wrangler secret put OPENAI_MODEL
 ```
+
+The Worker uses its built-in Workers AI binding (`[ai]` in `wrangler.toml`) for embeddings by default. No additional API key is needed — the binding provides direct in-network access to Cloudflare's AI models at zero cost.
 
 You can also set secrets interactively (Wrangler will prompt for the value):
 
@@ -175,6 +179,7 @@ https://company-docs-mcp.<your-subdomain>.workers.dev/
 | `ORGANIZATION_LOGO_URL` | URL to a logo image for the chat UI | (none) |
 | `ORGANIZATION_TAGLINE` | Tagline shown in the chat UI | `"Get instant answers from your documentation."` |
 | `ORGANIZATION_SUBTITLE` | Subtitle shown in the chat UI | `"Powered by MCP (Model Context Protocol)"` |
+| `EMBEDDING_PROVIDER` | Embedding backend: `"workers-ai"` or `"openai"` | Auto-detected |
 | `VECTOR_SEARCH_ENABLED` | Enable vector search via Supabase | `"true"` |
 | `VECTOR_SEARCH_MODE` | Search mode (`"vector"`, `"local"`, or `"hybrid"`) | `"vector"` |
 | `ALLOWED_ORIGINS` | CORS allowed origins (comma-separated or `*`) | `"*"` |
@@ -185,11 +190,11 @@ https://company-docs-mcp.<your-subdomain>.workers.dev/
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `OPENAI_API_KEY` | OpenAI API key for embeddings and chat | Yes |
-| `OPENAI_MODEL` | OpenAI model to use | No (defaults to `gpt-4o`) |
 | `SUPABASE_URL` | Your Supabase project URL | Yes |
 | `SUPABASE_SERVICE_KEY` | Supabase service role key (full access) | Yes |
 | `SUPABASE_ANON_KEY` | Supabase anon key (respects RLS) | Yes |
+| `OPENAI_API_KEY` | OpenAI API key — only needed for the AI chat feature; search, MCP, and Slack work without it | No |
+| `OPENAI_MODEL` | OpenAI chat model for AI chat responses | No (defaults to `gpt-4o`) |
 | `SLACK_SIGNING_SECRET` | Slack app signing secret for webhook verification | No |
 
 ### Bindings (configured in wrangler.toml)
@@ -197,7 +202,7 @@ https://company-docs-mcp.<your-subdomain>.workers.dev/
 | Binding | Type | Purpose |
 |---------|------|---------|
 | `CONTENT_CACHE` | KV Namespace | Caches search results (5 min TTL) |
-| `AI` | Workers AI | Cloudflare Workers AI fallback when OpenAI is unavailable |
+| `AI` | Workers AI | Default embedding provider and chat fallback |
 
 ## Monitoring
 
@@ -274,7 +279,8 @@ Secret changes take effect immediately without redeploying the Worker code.
 ### Health check shows warnings
 
 - `SUPABASE_URL/SUPABASE_ANON_KEY not set` -- run the `wrangler secret put` commands from Step 4
-- `OPENAI_API_KEY not set` -- set the secret; without it, AI chat and vector search are unavailable
+- `No embedding provider available` -- ensure the `[ai]` binding is present in `wrangler.toml`
+- `OPENAI_API_KEY not set` -- this is informational only; vector search uses Workers AI by default and works without OpenAI
 
 ### Search returning no results
 
@@ -299,7 +305,7 @@ Secret changes take effect immediately without redeploying the Worker code.
 
 - Run `npx wrangler whoami` to confirm you are authenticated
 - Check that `compatibility_flags` includes `"nodejs_compat"` (not the deprecated `node_compat = true`)
-- Ensure the `[ai]` binding is present if you want Workers AI fallback
+- Ensure the `[ai]` binding is present for Workers AI embeddings
 - Verify the KV namespace ID is valid
 
 ## Support
