@@ -151,10 +151,48 @@ export async function main() {
   }
   
   console.log(`Found ${markdownFiles.length} markdown file(s)\n`);
-  
+
+  // Clean stale entries from content/entries/ before writing.
+  // Remove any JSON files that don't correspond to files we're about to ingest.
+  // This prevents duplicates when IDs change or files are deleted from source.
+  const entriesDir = path.join(process.cwd(), 'content', 'entries');
+  try {
+    const existingFiles = await fs.readdir(entriesDir);
+    const existingJson = existingFiles.filter(f => f.endsWith('.json'));
+    if (existingJson.length > 0) {
+      // Build set of IDs we're about to generate
+      const { parseMarkdown: parseForId } = await import('./markdown-parser');
+      const incomingIds = new Set<string>();
+      for (const filePath of markdownFiles) {
+        const content = await fs.readFile(filePath, 'utf-8');
+        const entry = await parseForId(content, filePath, {
+          metadata: { category: args.category } as Partial<ContentMetadata>,
+        });
+        incomingIds.add(entry.id);
+      }
+      // Remove entries whose ID doesn't match any incoming file
+      for (const jsonFile of existingJson) {
+        try {
+          const raw = await fs.readFile(path.join(entriesDir, jsonFile), 'utf-8');
+          const existing = JSON.parse(raw);
+          if (existing?.id && !incomingIds.has(existing.id)) {
+            await fs.unlink(path.join(entriesDir, jsonFile));
+            if (args.verbose) {
+              console.log(`  Removed stale entry: ${jsonFile}`);
+            }
+          }
+        } catch {
+          // Skip unparseable files
+        }
+      }
+    }
+  } catch {
+    // entries dir may not exist yet — that's fine
+  }
+
   let successCount = 0;
   let errorCount = 0;
-  
+
   // Process each markdown file
   for (const filePath of markdownFiles) {
     const relativePath = path.relative(dirPath, filePath);

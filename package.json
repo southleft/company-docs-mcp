@@ -1,7 +1,7 @@
 {
 	"name": "company-docs-mcp",
-	"version": "1.0.1",
-	"description": "Self-hosted MCP server for organization documentation",
+	"version": "1.1.1",
+	"description": "Turn any documentation into an AI-searchable knowledge base with MCP integration, vector search, and a CLI for ingestion",
 	"private": false,
 	"type": "module",
 	"bin": {
@@ -37,14 +37,10 @@
 		"test": "vitest run --config vitest.unit.config.ts",
 		"test:watch": "vitest --config vitest.unit.config.ts",
 		"test:workers": "vitest run --config vitest.config.ts",
-		"test:local": "tsx scripts/test-local.ts",
 		"setup": "node scripts/setup.js",
-		"test:connection": "tsx scripts/test-connection.ts",
 		"slack:start": "tsx src/slack-bot/index.ts",
-		"slack:deploy": "tsx scripts/deploy-slack.ts",
 		"db:setup": "tsx scripts/setup-database.ts",
 		"db:setup:sql": "tsx scripts/setup-database.ts --sql-only",
-		"db:migrate": "tsx scripts/migrate-database.ts",
 		"build:cli": "node build-cli.mjs",
 		"prepublishOnly": "npm run build:cli"
 	},
@@ -52,7 +48,6 @@
 		"@modelcontextprotocol/sdk": "^1.22.0",
 		"@slack/bolt": "^4.4.0",
 		"@supabase/supabase-js": "^2.82.0",
-		"@types/cheerio": "^0.22.35",
 		"abort-controller": "^3.0.0",
 		"agents": "^0.0.95",
 		"cheerio": "^1.1.0",
@@ -65,6 +60,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.0.4",
 		"@cloudflare/vitest-pool-workers": "^0.12.16",
+		"@types/cheerio": "^0.22.35",
 		"@types/node": "^22.10.2",
 		"@typescript-eslint/eslint-plugin": "^8.18.2",
 		"@typescript-eslint/parser": "^8.18.2",

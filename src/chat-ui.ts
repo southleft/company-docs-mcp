@@ -47,7 +47,7 @@ export function getChatHtml(env: Env): string {
 
     <!-- Additional Meta -->
     <meta name="theme-color" content="#339af0">
-    <meta name="author" content="Southleft">
+    <meta name="author" content="${orgName}">
     <link rel="canonical" href="${orgDomain}">
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -999,9 +999,9 @@ export function getChatHtml(env: Env): string {
                             \\ud83e\\udd16 ${orgName} Documentation Assistant \\u2022 Powered by MCP
                         </Text>
                         <Text size="sm" style={{ color: '#6c6f75', fontSize: '13px' }}>
-                            Made with \\u2764\\ufe0f by{' '}
+                            Powered by{' '}
                             <a
-                                href="https://southleft.com"
+                                href="https://github.com/southleft/company-docs-mcp"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{
@@ -1012,7 +1012,7 @@ export function getChatHtml(env: Env): string {
                                 onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
                                 onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
                             >
-                                Southleft
+                                Company Docs MCP
                             </a>
                         </Text>
                     </footer>

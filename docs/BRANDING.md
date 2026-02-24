@@ -46,21 +46,21 @@ For the best appearance:
 
 ```toml
 [vars]
-ORGANIZATION_NAME = "Workday"
-ORGANIZATION_DOMAIN = "https://workday.com"
-ORGANIZATION_LOGO_URL = "https://cdn.workday.com/logo.svg"
-ORGANIZATION_SUBTITLE = "Canvas Kit Documentation Assistant"
-ORGANIZATION_TAGLINE = "Get instant answers about Canvas Kit components, patterns, and best practices."
+ORGANIZATION_NAME = "Acme Corp"
+ORGANIZATION_DOMAIN = "https://acme.com"
+ORGANIZATION_LOGO_URL = "https://acme.com/logo.svg"
+ORGANIZATION_SUBTITLE = "Acme Documentation Assistant"
+ORGANIZATION_TAGLINE = "Get instant answers about our products, policies, and best practices."
 ```
 
 ### Local Development (.env)
 
 ```bash
-ORGANIZATION_NAME=Workday
-ORGANIZATION_DOMAIN=https://workday.com
-ORGANIZATION_LOGO_URL=https://cdn.workday.com/logo.svg
-ORGANIZATION_SUBTITLE=Canvas Kit Documentation Assistant
-ORGANIZATION_TAGLINE=Get instant answers about Canvas Kit components, patterns, and best practices.
+ORGANIZATION_NAME=Acme Corp
+ORGANIZATION_DOMAIN=https://acme.com
+ORGANIZATION_LOGO_URL=https://acme.com/logo.svg
+ORGANIZATION_SUBTITLE=Acme Documentation Assistant
+ORGANIZATION_TAGLINE=Get instant answers about our products, policies, and best practices.
 ```
 
 ## UI Appearance

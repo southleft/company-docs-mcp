@@ -263,7 +263,7 @@ Remember: Your response MUST be extremely long and detailed. Include ALL informa
       type: 'header',
       text: {
         type: 'plain_text',
-        text: `📚 ${env.ORGANIZATION_NAME || 'CanvasKit Documentation'}`,
+        text: `📚 ${env.ORGANIZATION_NAME || 'Documentation'}`,
         emoji: true
       }
     });
@@ -349,7 +349,7 @@ Remember: Your response MUST be extremely long and detailed. Include ALL informa
       // Create sources text with clickable links to the web UI
       let sourcesText = '*Sources:*\n';
       const uniqueSources = new Set();
-      const baseUrl = 'https://company-docs-mcp.southleft-llc.workers.dev';
+      const baseUrl = env.WORKER_BASE_URL || 'https://company-docs-mcp.workers.dev';
       
       // Collect unique sources from search results (up to 10)
       let sourceCount = 0;

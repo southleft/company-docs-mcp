@@ -15,7 +15,7 @@ Before starting, ensure you have:
 
 ```bash
 # Clone the repository
-git clone https://github.com/southleft/company-docs-mcp.git
+git clone https://github.com/southleft/company-docs-mcp.git  # or your fork
 cd company-docs-mcp
 
 # Install dependencies

@@ -12,10 +12,19 @@ export interface MarkdownParseOptions {
 }
 
 /**
- * Generates a unique ID for content entries
+ * Generates a deterministic ID from a file path.
+ * Same file always produces the same ID, preventing duplicates on re-ingestion.
  */
-function generateId(): string {
-  return crypto.randomBytes(12).toString('base64url');
+function generateIdFromPath(filepath: string): string {
+  const basename = filepath.split('/').pop() || filepath;
+  const slug = basename
+    .replace(/\.md$/i, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  // Short hash for uniqueness in case two files slug to the same thing
+  const hash = crypto.createHash('sha256').update(filepath).digest('base64url').slice(0, 8);
+  return `${slug}-${hash}`;
 }
 
 /**
@@ -209,7 +218,7 @@ export async function parseMarkdown(
   
   // Build the content entry
   const entry: ContentEntry = {
-    id: generateId(),
+    id: generateIdFromPath(sourcePath),
     title,
     source: {
       type: 'markdown' as SourceType,

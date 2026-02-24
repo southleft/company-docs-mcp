@@ -234,6 +234,52 @@ content has changed since the last ingestion are re-embedded and uploaded.
 		}
 	}
 
+	// 3b. Deduplicate: remove older entries with the same title
+	if (!FLAG_CLEAR) {
+		const { data: allRows } = await supabase
+			.from("content_entries")
+			.select("id, title, updated_at")
+			.order("updated_at", { ascending: false });
+
+		if (allRows && allRows.length > 0) {
+			const seen = new Map<string, string>();
+			const duplicateIds: string[] = [];
+
+			for (const row of allRows) {
+				const key = row.title?.toLowerCase().trim();
+				if (!key) continue;
+				if (seen.has(key)) {
+					duplicateIds.push(row.id);
+				} else {
+					seen.set(key, row.id);
+				}
+			}
+
+			if (duplicateIds.length > 0) {
+				if (FLAG_DRY_RUN) {
+					console.log(
+						`[dry-run] Would remove ${duplicateIds.length} duplicate entries`,
+					);
+				} else {
+					// Delete chunks first (FK constraint), then entries
+					for (const id of duplicateIds) {
+						await supabase
+							.from("content_chunks")
+							.delete()
+							.eq("entry_id", id);
+					}
+					await supabase
+						.from("content_entries")
+						.delete()
+						.in("id", duplicateIds);
+					console.log(
+						`Removed ${duplicateIds.length} duplicate entries`,
+					);
+				}
+			}
+		}
+	}
+
 	// 4. Load content from local entries (filesystem-based)
 	console.log("Loading content entries from content/entries/...");
 	const entries = await loadEntriesFromDisk();

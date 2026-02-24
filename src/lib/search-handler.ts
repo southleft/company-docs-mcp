@@ -13,7 +13,8 @@ export async function searchWithSupabase(options: SearchOptions = {}, env?: any)
   const vectorEnabled = env?.VECTOR_SEARCH_ENABLED;
   const vectorSearchMode = env?.VECTOR_SEARCH_MODE || 'text';
   const supabaseUrl = env?.SUPABASE_URL;
-  const supabaseKey = env?.SUPABASE_ANON_KEY;
+  // Prefer service key (bypasses RLS) — appropriate for server-side Worker
+  const supabaseKey = env?.SUPABASE_SERVICE_KEY || env?.SUPABASE_ANON_KEY;
   const openaiKey = env?.OPENAI_API_KEY;
   const logPerformance = env?.LOG_SEARCH_PERFORMANCE === 'true';
 
@@ -22,13 +23,12 @@ export async function searchWithSupabase(options: SearchOptions = {}, env?: any)
   // Use Supabase vector search when configured
   if (query && vectorEnabled === 'true' && vectorSearchMode === 'vector') {
     try {
-      const { createClient } = require('@supabase/supabase-js');
-
       if (supabaseUrl && supabaseKey && openaiKey) {
+        const { createClient } = await import('@supabase/supabase-js');
         const supabase = createClient(supabaseUrl, supabaseKey);
 
-        const OpenAI = require('openai');
-        const openai = new OpenAI.default({ apiKey: openaiKey });
+        const OpenAI = (await import('openai')).default;
+        const openai = new OpenAI({ apiKey: openaiKey });
 
         const embeddingResponse = await openai.embeddings.create({
           model: 'text-embedding-3-small',

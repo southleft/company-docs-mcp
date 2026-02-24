@@ -8,6 +8,7 @@
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { registerTools, type Env, type WorkerExecutionContext } from "./tools";
 
 // CORS headers for all responses
@@ -128,29 +129,28 @@ async function processMessage(server: McpServer, message: any, env: Env, request
  * The SDK stores tools internally — we access them for the tools/list response.
  */
 function getRegisteredToolSchemas(server: McpServer): any[] {
-  // Access the SDK's internal tool registry
   const internal = server as any;
+  const toolMap = internal._registeredTools || internal._tools;
 
-  // Try _registeredTools (SDK v1.x pattern)
-  if (internal._registeredTools) {
-    return Array.from(internal._registeredTools.entries()).map((entry: any) => ({
-      name: entry[0],
-      description: entry[1]?.description || "",
-      inputSchema: entry[1]?.inputSchema || { type: "object", properties: {} },
-    }));
+  if (!toolMap) {
+    console.warn("[MCP] Could not access internal tool registry — returning empty tools list");
+    return [];
   }
 
-  // Try _tools (alternative internal name)
-  if (internal._tools) {
-    return Array.from(internal._tools.entries()).map((entry: any) => ({
-      name: entry[0],
-      description: entry[1]?.description || "",
-      inputSchema: entry[1]?.inputSchema || { type: "object", properties: {} },
-    }));
-  }
+  // SDK 1.22+ uses a plain object; older versions used a Map
+  const entries: [string, any][] = typeof toolMap.entries === "function" && toolMap.constructor !== Object
+    ? Array.from(toolMap.entries())
+    : Object.entries(toolMap);
 
-  console.warn("[MCP] Could not access internal tool registry — returning empty tools list");
-  return [];
+  return entries
+    .filter(([, tool]) => tool?.enabled !== false)
+    .map(([name, tool]) => ({
+      name,
+      description: tool?.description || "",
+      inputSchema: tool?.inputSchema
+        ? zodToJsonSchema(tool.inputSchema, { strictUnions: true })
+        : { type: "object", properties: {} },
+    }));
 }
 
 /**
@@ -164,12 +164,12 @@ async function callRegisteredTool(server: McpServer, toolName: string, args: any
     throw new Error("Cannot access tool registry");
   }
 
-  const tool = toolMap.get(toolName);
+  // SDK 1.22+ uses a plain object; older versions used a Map
+  const tool = typeof toolMap.get === "function" ? toolMap.get(toolName) : toolMap[toolName];
   if (!tool) {
     throw new Error(`Unknown tool: ${toolName}`);
   }
 
-  // The SDK stores the handler function — call it
   if (typeof tool.handler === "function") {
     return tool.handler(args, {});
   }

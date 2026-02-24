@@ -10,7 +10,7 @@ The company-docs-mcp includes Slack integration to search documentation directly
 1. Go to [api.slack.com/apps](https://api.slack.com/apps)
 2. Click "Create New App"
 3. Choose "From scratch"
-4. Name your app (e.g., "CanvasKit Docs")
+4. Name your app (e.g., "Company Docs")
 5. Select your workspace
 
 ### 2. Configure Slash Commands
@@ -22,7 +22,7 @@ The company-docs-mcp includes Slack integration to search documentation directly
    - **Request URL**: 
      - For local testing: Use ngrok (see below)
      - For production: `https://your-worker-name.workers.dev/slack`
-   - **Short Description**: Search CanvasKit documentation
+   - **Short Description**: Search company documentation
    - **Usage Hint**: [search term]
 
 ### 3. Configure OAuth & Permissions
