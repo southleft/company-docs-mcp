@@ -152,19 +152,21 @@ npx company-docs publish --dry-run --verbose
 
 ```mermaid
 flowchart TD
-    subgraph ingest ["Ingestion (you run this)"]
-        A["Markdown Files"] -->|"ingest markdown"| B["content/entries/"]
-        B -->|"publish"| C["Supabase + pgvector"]
-        D["OpenAI API"] -.->|"embed"| C
+    subgraph ingest [" Ingestion — you run this "]
+        direction TB
+        A["Markdown Files\n\nyour docs/"] -- ingest markdown --> B["content/entries/\n\nJSON files"]
+        B -- publish --> D["OpenAI API\n\ntext-embedding-3-small"]
+        D -- embed + upsert --> C[("Supabase\n\npgvector")]
     end
 
-    subgraph query ["Query (happens automatically)"]
-        E["User asks a question"] --> F["Claude Desktop / Slack"]
-        F -->|"MCP protocol"| G["Cloudflare Worker"]
-        G -->|"embed query"| D
-        G -->|"vector search"| C
-        C -->|"matched docs"| G
-        G -->|"results"| F
+    subgraph query [" Query — happens automatically "]
+        direction TB
+        E["User asks a question\n\n"] --> F["Claude Desktop · Slack · Chat UI\n\n"]
+        F -- MCP protocol --> G["Cloudflare Worker\n\nMCP Server"]
+        G -- embed query --> H["OpenAI API\n\n"]
+        G -- vector search --> I[("Supabase\n\n")]
+        I -- matched docs --> G
+        G -- results --> F
     end
 
     style A fill:#f9f9f9,stroke:#333
@@ -174,6 +176,8 @@ flowchart TD
     style E fill:#f9f9f9,stroke:#333
     style F fill:#cce5ff,stroke:#004085
     style G fill:#cce5ff,stroke:#004085
+    style H fill:#e2e3e5,stroke:#383d41
+    style I fill:#d4edda,stroke:#155724
 ```
 
 **Ingestion — you run this once (or whenever docs change):**
