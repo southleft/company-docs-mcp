@@ -32,27 +32,27 @@ The rest of this README is for you. Follow the setup guide below to get everythi
 
 The system uses three services. All three offer free tiers that are sufficient for most teams.
 
-**Publishing (you do this):**
-
 ```mermaid
-flowchart LR
-    A["Your Markdown Files"] -->|"ingest + publish"| B["Cloudflare Workers AI"] -->|"store vectors"| C[("Supabase")]
+flowchart TD
+    A["Your Markdown Files"]
+    B["Cloudflare Workers AI"]
+    C[("Supabase")]
+    D["Your Team\nClaude, Cursor, Slack, Chat UI"]
+    E["Cloudflare Worker"]
+
+    A -- "ingest + publish" --> B
+    B -- "store vectors" --> C
+
+    D -- "ask a question" --> E
+    E -- "vector search" --> C
+    C -. "matching docs" .-> E
+    E -. "answers" .-> D
 
     style A fill:#f9f9f9,stroke:#333,color:#333
     style B fill:#dbeafe,stroke:#1d4ed8,color:#333
     style C fill:#d4edda,stroke:#155724,color:#333
-```
-
-**Querying (your team does this):**
-
-```mermaid
-flowchart LR
-    D["Claude, Cursor, Slack, or Chat UI"] -->|"ask a question"| E["Cloudflare Worker"] -->|"vector search"| F[("Supabase")]
-    F -->|"matching docs"| E -->|"answers"| D
-
     style D fill:#f0fdf4,stroke:#15803d,color:#333
     style E fill:#dbeafe,stroke:#1d4ed8,color:#333
-    style F fill:#d4edda,stroke:#155724,color:#333
 ```
 
 | Service | What it does | Why it's needed |
