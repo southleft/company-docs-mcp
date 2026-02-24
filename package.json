@@ -1,6 +1,6 @@
 {
 	"name": "company-docs-mcp",
-	"version": "1.3.0",
+	"version": "1.3.1",
 	"description": "Turn any documentation into an AI-searchable knowledge base with MCP integration, vector search, and a CLI for ingestion",
 	"private": false,
 	"type": "module",

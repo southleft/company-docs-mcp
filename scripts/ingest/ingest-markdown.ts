@@ -13,9 +13,12 @@ import { minimist } from './deps';
 // Parse command line arguments
 function parseArgs() {
   const argv = minimist(process.argv.slice(2));
+  // Track whether --category was explicitly provided by the user
+  const explicitCategory = argv.category || argv.c || undefined;
   return {
     dir: argv.dir || argv.d || './docs',
-    category: argv.category || argv.c || 'documentation',
+    category: explicitCategory || 'documentation',
+    categoryExplicit: explicitCategory !== undefined,
     recursive: argv.recursive !== false, // Default to true
     verbose: argv.verbose || argv.v || false,
     help: argv.help || argv.h || false,
@@ -35,10 +38,21 @@ Usage:
 
 Options:
   --dir, -d        Directory containing markdown files (default: ./docs)
-  --category, -c   Category for the content (default: documentation)
+  --category, -c   Category override for all files (default: documentation)
+                   Note: YAML frontmatter 'category' takes priority over this flag.
+                   This flag only applies when frontmatter has no category field.
   --recursive      Recursively search subdirectories (default: true)
   --verbose, -v    Show detailed output
   --help, -h       Show this help message
+
+Frontmatter Support:
+  Markdown files may include YAML frontmatter between --- markers at the top:
+    ---
+    title: My Component
+    category: components
+    tags: [button, ui, interactive]
+    ---
+  Frontmatter values (title, category, tags, etc.) take priority over defaults.
 
 Examples:
   npm run ingest:markdown -- --dir=./docs
@@ -163,10 +177,15 @@ export async function main() {
       // Build set of IDs we're about to generate
       const { parseMarkdown: parseForId } = await import('./markdown-parser');
       const incomingIds = new Set<string>();
+      // Only pass category to metadata when explicitly provided via CLI flag,
+      // so frontmatter category is not overridden by the default value
+      const cliMetadata: Partial<ContentMetadata> = args.categoryExplicit
+        ? { category: args.category }
+        : {};
       for (const filePath of markdownFiles) {
         const content = await fs.readFile(filePath, 'utf-8');
         const entry = await parseForId(content, filePath, {
-          metadata: { category: args.category } as Partial<ContentMetadata>,
+          metadata: cliMetadata,
         });
         incomingIds.add(entry.id);
       }
@@ -204,13 +223,14 @@ export async function main() {
     try {
       // Read the markdown file
       const content = await fs.readFile(filePath, 'utf-8');
-      
+
       // Parse the markdown content
-      const entry = await parseMarkdown(content, filePath, {
-        metadata: {
-          category: args.category,
-        } as Partial<ContentMetadata>,
-      });
+      // Only pass category when explicitly set via CLI flag, so that
+      // frontmatter category is not overridden by the default value
+      const metadata: Partial<ContentMetadata> = args.categoryExplicit
+        ? { category: args.category }
+        : {};
+      const entry = await parseMarkdown(content, filePath, { metadata });
       
       // Save the entry
       await saveEntry(entry);

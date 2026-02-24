@@ -12,6 +12,108 @@ export interface MarkdownParseOptions {
 }
 
 /**
+ * Parsed YAML frontmatter result
+ */
+interface FrontmatterResult {
+  /** Parsed key-value data from frontmatter */
+  data: Record<string, unknown>;
+  /** Content with frontmatter stripped */
+  content: string;
+}
+
+/**
+ * Parse a simple YAML value (string, number, boolean, or bracket-syntax array).
+ * Handles only the subset of YAML used in documentation frontmatter.
+ */
+function parseYamlValue(raw: string): unknown {
+  const trimmed = raw.trim();
+
+  // Empty value
+  if (trimmed === '' || trimmed === '~' || trimmed === 'null') {
+    return null;
+  }
+
+  // Boolean
+  if (trimmed === 'true') return true;
+  if (trimmed === 'false') return false;
+
+  // Bracket-syntax array: [a, b, c]
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    const inner = trimmed.slice(1, -1).trim();
+    if (inner === '') return [];
+    return inner.split(',').map(item => {
+      const val = item.trim();
+      // Strip surrounding quotes from array items
+      if ((val.startsWith('"') && val.endsWith('"')) ||
+          (val.startsWith("'") && val.endsWith("'"))) {
+        return val.slice(1, -1);
+      }
+      return val;
+    });
+  }
+
+  // Number (integer or float)
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+
+  // Quoted string — strip quotes
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+    return trimmed.slice(1, -1);
+  }
+
+  // Plain string
+  return trimmed;
+}
+
+/**
+ * Extract and parse YAML frontmatter from markdown content.
+ * Frontmatter must start at the very beginning of the file with '---'.
+ * Returns parsed data and the content with frontmatter removed.
+ * If no frontmatter is found, returns empty data and the original content.
+ */
+function parseFrontmatter(content: string): FrontmatterResult {
+  // Frontmatter must start at position 0 with '---'
+  if (!content.startsWith('---')) {
+    return { data: {}, content };
+  }
+
+  // Find the closing '---' delimiter (must be on its own line)
+  const closingIndex = content.indexOf('\n---', 3);
+  if (closingIndex === -1) {
+    return { data: {}, content };
+  }
+
+  const frontmatterBlock = content.slice(3, closingIndex).trim();
+  // Content starts after the closing '---' and its newline
+  const remainingContent = content.slice(closingIndex + 4).replace(/^\n+/, '');
+
+  const data: Record<string, unknown> = {};
+
+  for (const line of frontmatterBlock.split('\n')) {
+    // Skip empty lines and comments
+    const trimmedLine = line.trim();
+    if (trimmedLine === '' || trimmedLine.startsWith('#')) {
+      continue;
+    }
+
+    // Match key: value pairs
+    const colonIndex = trimmedLine.indexOf(':');
+    if (colonIndex === -1) continue;
+
+    const key = trimmedLine.slice(0, colonIndex).trim();
+    const rawValue = trimmedLine.slice(colonIndex + 1);
+
+    if (key) {
+      data[key] = parseYamlValue(rawValue);
+    }
+  }
+
+  return { data, content: remainingContent };
+}
+
+/**
  * Generates a deterministic ID from a file path.
  * Same file always produces the same ID, preventing duplicates on re-ingestion.
  */
@@ -185,21 +287,34 @@ function extractMetadataFromContent(content: string): Partial<ContentMetadata> {
 }
 
 /**
- * Parse markdown content and create a ContentEntry
+ * Parse markdown content and create a ContentEntry.
+ *
+ * Metadata priority (highest to lowest):
+ *   1. YAML frontmatter values (author's explicit intent)
+ *   2. CLI options.metadata (when explicitly provided)
+ *   3. Content-based auto-detection heuristics
+ *   4. Defaults
  */
 export async function parseMarkdown(
   markdownContent: string,
   sourcePath: string,
   options: MarkdownParseOptions = {}
 ): Promise<ContentEntry> {
-  // Extract title
-  const title = extractTitle(markdownContent, sourcePath);
-  
-  // Extract metadata hints
-  const extractedMetadata = extractMetadataFromContent(markdownContent);
-  
-  // Process content - clean up but preserve markdown structure
-  let processedContent = markdownContent
+  // ── 1. Parse YAML frontmatter ─────────────────────────────
+  const { data: frontmatter, content: contentWithoutFrontmatter } =
+    parseFrontmatter(markdownContent);
+
+  // ── 2. Extract title ──────────────────────────────────────
+  // Frontmatter title wins, then H1 header, then filename
+  const title =
+    (typeof frontmatter.title === 'string' && frontmatter.title) ||
+    extractTitle(contentWithoutFrontmatter, sourcePath);
+
+  // ── 3. Extract content-based metadata heuristics ──────────
+  const extractedMetadata = extractMetadataFromContent(contentWithoutFrontmatter);
+
+  // ── 4. Process content (frontmatter already stripped) ─────
+  const processedContent = contentWithoutFrontmatter
     // Normalize line endings
     .replace(/\r\n/g, '\n')
     // Remove excessive blank lines
@@ -209,14 +324,54 @@ export async function parseMarkdown(
     .map(line => line.trimEnd())
     .join('\n')
     .trim();
-  
-  // Create chunks
+
+  // ── 5. Create chunks ─────────────────────────────────────
   const chunks = chunkBySection(processedContent, {
     chunkSize: options.chunkSize,
     overlapSize: options.overlapSize,
   });
-  
-  // Build the content entry
+
+  // ── 6. Merge tags (frontmatter first, then auto-detected, deduplicated) ──
+  const frontmatterTags: string[] = Array.isArray(frontmatter.tags)
+    ? (frontmatter.tags as unknown[]).map(t => String(t))
+    : [];
+  const autoTags: string[] = extractedMetadata.tags || [];
+  const cliTags: string[] = options.metadata?.tags || [];
+  const mergedTags = [...new Set([...frontmatterTags, ...cliTags, ...autoTags])];
+
+  // ── 7. Resolve category with priority ordering ────────────
+  // Frontmatter > CLI (explicit only) > auto-detected > default
+  const resolvedCategory: string =
+    (typeof frontmatter.category === 'string' && frontmatter.category) ||
+    options.metadata?.category ||
+    extractedMetadata.category ||
+    'documentation';
+
+  // ── 8. Build additional metadata from frontmatter ─────────
+  const frontmatterMeta: Record<string, unknown> = {};
+  if (typeof frontmatter.description === 'string') {
+    frontmatterMeta.description = frontmatter.description;
+  }
+  if (typeof frontmatter.source === 'string') {
+    frontmatterMeta.source_file = frontmatter.source;
+  }
+  if (typeof frontmatter.figma === 'string') {
+    frontmatterMeta.figma = frontmatter.figma;
+  }
+  if (typeof frontmatter.status === 'string') {
+    frontmatterMeta.status = frontmatter.status;
+  }
+  if (typeof frontmatter.version === 'string' || typeof frontmatter.version === 'number') {
+    frontmatterMeta.version = String(frontmatter.version);
+  }
+  if (typeof frontmatter.author === 'string') {
+    frontmatterMeta.author = frontmatter.author;
+  }
+  if (typeof frontmatter.department === 'string') {
+    frontmatterMeta.department = frontmatter.department;
+  }
+
+  // ── 9. Build the content entry ────────────────────────────
   const entry: ContentEntry = {
     id: generateIdFromPath(sourcePath),
     title,
@@ -228,14 +383,17 @@ export async function parseMarkdown(
     content: processedContent,
     chunks,
     metadata: {
-      category: 'general',
-      tags: [],
       confidence: 'medium',
       last_updated: new Date().toISOString(),
+      // Layer metadata: auto-detected → CLI → frontmatter (highest priority)
       ...extractedMetadata,
       ...options.metadata,
+      ...frontmatterMeta,
+      // Resolved category and merged tags override all layers
+      category: resolvedCategory,
+      tags: mergedTags,
     },
   };
-  
+
   return entry;
 }

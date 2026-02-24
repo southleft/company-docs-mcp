@@ -9,7 +9,7 @@
  * Provider detection:
  *   1. Explicit EMBEDDING_PROVIDER env var
  *   2. If OPENAI_API_KEY is set → "openai" (backward compatibility)
- *   3. Default → "workers-ai" (requires CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN)
+ *   3. Default → "workers-ai" (requires CLOUDFLARE_ACCOUNT_ID + token via env or wrangler OAuth)
  *
  * Usage:
  *   npm run ingest:supabase              # incremental upsert
@@ -26,6 +26,7 @@ import {
 	detectProvider,
 	embedWithWorkersAIRest,
 	embedWithOpenAI,
+	getCloudflareToken,
 	PROVIDER_CONFIG,
 	type EmbeddingProvider,
 } from "../../src/lib/embedding-provider";
@@ -102,7 +103,9 @@ Options:
   --help       Show this help message
 
 Embedding providers:
-  Workers AI (default)  Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN
+  Workers AI (default)  Requires CLOUDFLARE_ACCOUNT_ID.
+                        Token is auto-detected from wrangler OAuth
+                        (npx wrangler login) or CLOUDFLARE_API_TOKEN in .env.
   OpenAI                Set OPENAI_API_KEY
 
 Provider is auto-detected from your .env file. Set EMBEDDING_PROVIDER
@@ -126,7 +129,14 @@ content has changed since the last ingestion are re-embedded and uploaded.
 
 	if (provider === "workers-ai") {
 		cloudflareAccountId = requireEnv("CLOUDFLARE_ACCOUNT_ID");
-		cloudflareApiToken = requireEnv("CLOUDFLARE_API_TOKEN");
+		const token = getCloudflareToken();
+		if (!token) {
+			console.error(
+				"No Cloudflare API token found. Either set CLOUDFLARE_API_TOKEN in .env or run `npx wrangler login` to authenticate.",
+			);
+			process.exit(1);
+		}
+		cloudflareApiToken = token;
 	} else {
 		requireEnv("OPENAI_API_KEY");
 	}
