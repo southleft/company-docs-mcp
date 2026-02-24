@@ -2,7 +2,7 @@
  * Search diversity improvements to prevent PDF dominance
  */
 
-import { ContentEntry, ContentChunk } from '../../types/content';
+import { ContentEntry, ContentChunk } from './content';
 
 export interface DiverseSearchResult {
   entry: ContentEntry;

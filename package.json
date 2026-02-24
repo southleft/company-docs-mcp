@@ -22,6 +22,12 @@
 		"ingest:markdown": "tsx scripts/ingest/ingest-markdown.ts --",
 		"ingest:web": "tsx scripts/ingest/crawl-website.ts --",
 		"ingest:supabase": "tsx scripts/ingest/ingest-supabase.ts",
+		"ingest:fresh": "tsx scripts/ingest/ingest-supabase.ts -- --clear",
+		"ingest:update": "tsx scripts/ingest/ingest-supabase.ts",
+		"ingest:preview": "tsx scripts/ingest/ingest-supabase.ts -- --dry-run --verbose",
+		"test": "vitest run --config vitest.unit.config.ts",
+		"test:watch": "vitest --config vitest.unit.config.ts",
+		"test:workers": "vitest run --config vitest.config.ts",
 		"test:local": "tsx scripts/test-local.ts",
 		"setup": "node scripts/setup.js",
 		"test:connection": "tsx scripts/test-connection.ts",
@@ -47,6 +53,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.0.4",
+		"@cloudflare/vitest-pool-workers": "^0.12.16",
 		"@types/node": "^22.10.2",
 		"@typescript-eslint/eslint-plugin": "^8.18.2",
 		"@typescript-eslint/parser": "^8.18.2",
@@ -54,6 +61,7 @@
 		"node-fetch": "^2.7.0",
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.2",
+		"vitest": "^4.0.18",
 		"wrangler": "^4.20.5"
 	}
 }

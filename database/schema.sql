@@ -18,6 +18,7 @@ CREATE TABLE content_entries (
   confidence TEXT,
   embedding vector(1536), -- OpenAI text-embedding-3-small dimension
   metadata JSONB,
+  content_hash TEXT, -- SHA-256 hash for incremental ingestion
   ingested_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   search_text tsvector

@@ -70,25 +70,10 @@ export async function loadAllContentEntries(): Promise<ContentEntry[]> {
  * Fallback method to load known content files
  * This is used when dynamic discovery fails
  */
-async function loadFallbackEntries(entries: ContentEntry[]): Promise<void> {
-	const knownFiles = [
-		'8zWJWrDK_bTOv3_KFo30V-pdf-designsystemshandbook-pdf.json',
-		'sample-button-guidelines.json',
-		'oRdJezsZL3IrFVL8--U4d-url-github-primer-button.json'
-	];
-
-	for (const filename of knownFiles) {
-		try {
-			const response = await fetch(`/content/entries/${filename}`);
-			if (response.ok) {
-				const content = await response.json() as ContentEntry;
-				entries.push(content);
-				console.log(`✅ Loaded: ${content.title}`);
-			}
-		} catch (error) {
-			console.warn(`⚠️  Could not load ${filename}:`, error);
-		}
-	}
+async function loadFallbackEntries(_entries: ContentEntry[]): Promise<void> {
+	// No hardcoded fallback files — content is loaded via manifest.json.
+	// If the manifest is missing, users need to run the ingestion pipeline.
+	console.warn("No manifest found and no fallback entries available. Run ingestion to add content.");
 }
 
 /**
@@ -100,12 +85,6 @@ export function generateManifest(): { files: string[] } {
 	// For Cloudflare Workers, we'll need to maintain this manually or
 	// generate it during the build process
 
-	// For now, return a static list that can be updated
-	const files = [
-		'8zWJWrDK_bTOv3_KFo30V-pdf-designsystemshandbook-pdf.json',
-		'sample-button-guidelines.json',
-		'oRdJezsZL3IrFVL8--U4d-url-github-primer-button.json'
-	];
-
-	return { files };
+	// Return empty — users generate the manifest via the ingestion pipeline.
+	return { files: [] };
 }

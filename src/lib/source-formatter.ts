@@ -2,23 +2,11 @@
  * Format and clean up source references for display
  */
 
-import { ContentEntry } from '../../types/content';
+import { ContentEntry } from './content';
 
-// Map of known books/PDFs to their actual sources
-const KNOWN_SOURCES: Record<string, { name: string; url: string }> = {
-  'designsystemshandbook': {
-    name: 'Design Systems Handbook',
-    url: 'https://www.designbetter.co/design-systems-handbook'
-  },
-  'laying-the-foundations': {
-    name: 'Laying the Foundations',
-    url: 'https://designsystem.digital.gov/'
-  },
-  'laying the foundations': {
-    name: 'Laying the Foundations', 
-    url: 'https://designsystem.digital.gov/'
-  }
-};
+// Map of known books/PDFs to their actual sources.
+// Entries are populated at ingestion time via content metadata — no hardcoded values.
+const KNOWN_SOURCES: Record<string, { name: string; url: string }> = {};
 
 /**
  * Format a source reference for clean display
