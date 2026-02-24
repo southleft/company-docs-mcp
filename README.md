@@ -162,7 +162,6 @@ flowchart TD
     E["User Question"] --> F["Claude Desktop / Slack / Chat UI"]
     F -->|MCP protocol| G["Cloudflare Worker"]
     G -->|embed query| H["OpenAI Embeddings"]
-    H --> G
     G -->|vector search| I[("Supabase + pgvector")]
     I -->|matched docs| G
     G -->|results| F
