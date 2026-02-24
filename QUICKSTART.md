@@ -1,12 +1,12 @@
 # Quick Start Guide
 
-Get Company Docs MCP running: ingest your markdown, deploy the MCP server, and connect it to your MCP client.
+Get Company Docs MCP running: write your docs in markdown, publish them to a database, and connect your AI tools.
 
-## Prerequisites
+## What You'll Need
 
-- [Node.js 18+](https://nodejs.org/)
-- [Cloudflare account](https://dash.cloudflare.com/sign-up) — hosts the Worker and provides embeddings (free tier works)
-- [Supabase account](https://supabase.com) — stores documentation vectors (free tier works)
+- [Node.js 18+](https://nodejs.org/) — the runtime that powers the CLI tool
+- [Cloudflare account](https://dash.cloudflare.com/sign-up) — hosts the server and provides AI (free tier works)
+- [Supabase account](https://supabase.com) — stores your documentation (free tier works)
 
 No OpenAI or other third-party AI keys are needed.
 
@@ -18,36 +18,34 @@ npm install company-docs-mcp
 
 ## 2. Set Up Supabase
 
-Supabase stores your documentation as vectors for semantic search.
-
 1. Create a new project at [supabase.com](https://supabase.com)
 2. Go to **Settings > API** and copy your **Project URL**, **anon key**, and **service_role key**
 3. Open the **SQL Editor**, paste the contents of [`database/schema.sql`](database/schema.sql), and run it
 
 The schema file is in the npm package at `node_modules/company-docs-mcp/database/schema.sql`.
 
-## 3. Set Up Cloudflare Credentials
+## 3. Log In to Cloudflare
 
-The CLI uses your Cloudflare account for embedding generation during ingestion.
+```bash
+npx wrangler login
+```
 
-1. Log in to [dash.cloudflare.com](https://dash.cloudflare.com)
-2. Copy your **Account ID** from the right sidebar of the overview page
-3. Go to **My Profile > API Tokens > Create Token** with **Workers AI: Read** permission
-4. Copy the generated token
+A browser window will open. Log in and click **Allow**.
+
+Then copy your **Account ID** from the right sidebar at [dash.cloudflare.com](https://dash.cloudflare.com).
 
 ## 4. Configure Environment
 
 Create a `.env` file in your project root:
 
 ```env
-# Supabase — where your documentation vectors are stored
+# Supabase — where your documentation is stored
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_KEY=eyJ...
 
-# Cloudflare — for generating embeddings during ingestion
+# Cloudflare — your Account ID
 CLOUDFLARE_ACCOUNT_ID=your-account-id
-CLOUDFLARE_API_TOKEN=your-api-token
 ```
 
 ## 5. Write Your Documentation
@@ -64,27 +62,43 @@ docs/
     └── pto-policy.md
 ```
 
-## 6. Ingest and Publish
+Optionally add YAML frontmatter to control categorization:
+
+```markdown
+---
+title: PTO Policy
+category: hr
+tags: [pto, leave, time-off]
+---
+
+# PTO Policy
+
+Your content here...
+```
+
+## 6. Publish
 
 ```bash
-# Parse markdown files into structured entries
+# Parse markdown files
 npx company-docs ingest markdown --dir=./docs
 
-# Push entries to Supabase with Workers AI embeddings
+# Push to the database with AI-generated vectors
 npx company-docs publish
 ```
 
-To preview what would be published without writing to the database:
+To preview without writing to the database:
 
 ```bash
 npx company-docs publish --dry-run
 ```
 
-Re-run these commands any time your docs change. The system uses content hashing — only changed entries are re-embedded.
+Re-run these commands any time your docs change. Only changed entries are re-processed.
 
-## 7. Deploy the Cloudflare Worker
+> **If you see an authentication error:** Your wrangler login session may have expired. Run `npx wrangler login` again.
 
-The Worker is the server that MCP clients, Slack, and the chat UI connect to. Deploy it from the repository:
+## 7. Deploy the Server
+
+The server is what your team connects to. It runs on Cloudflare Workers.
 
 ### Clone and install
 
@@ -92,12 +106,6 @@ The Worker is the server that MCP clients, Slack, and the chat UI connect to. De
 git clone https://github.com/southleft/company-docs-mcp.git
 cd company-docs-mcp
 npm install
-```
-
-### Authenticate Wrangler
-
-```bash
-npx wrangler login
 ```
 
 ### Configure wrangler.toml
@@ -108,7 +116,6 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Workers AI binding — provides free embedding generation at query time
 [ai]
 binding = "AI"
 
@@ -118,7 +125,7 @@ VECTOR_SEARCH_ENABLED = "true"
 VECTOR_SEARCH_MODE = "vector"
 ```
 
-### Create a KV namespace (caches search results for 5 minutes)
+### Create a search cache
 
 ```bash
 npx wrangler kv namespace create CONTENT_CACHE
@@ -128,7 +135,7 @@ npx wrangler kv namespace create CONTENT_CACHE
 # id = "your-kv-namespace-id"
 ```
 
-### Set secrets
+### Set database secrets
 
 ```bash
 echo "your-supabase-url" | npx wrangler secret put SUPABASE_URL
@@ -136,19 +143,17 @@ echo "your-anon-key" | npx wrangler secret put SUPABASE_ANON_KEY
 echo "your-service-key" | npx wrangler secret put SUPABASE_SERVICE_KEY
 ```
 
-No OpenAI key needed — the Worker uses its built-in Workers AI binding for embeddings.
-
 ### Deploy
 
 ```bash
 npm run deploy
 ```
 
-Your MCP server is now live at `https://company-docs-mcp.<your-subdomain>.workers.dev`.
+Your server is now live at `https://company-docs-mcp.<your-subdomain>.workers.dev`.
 
-## 8. Connect Your MCP Client
+## 8. Connect Your AI Tools
 
-The MCP endpoint is:
+Share this URL with your team:
 
 ```
 https://company-docs-mcp.<your-subdomain>.workers.dev/mcp
@@ -156,80 +161,44 @@ https://company-docs-mcp.<your-subdomain>.workers.dev/mcp
 
 **Claude:** Settings > Connectors > Add custom connector > paste the URL.
 
-**Cursor / Windsurf / Other clients:** Add the URL as a remote MCP server in your client's settings.
+**Cursor / Windsurf:** Add the URL as a remote MCP server in settings.
 
-Your client will now have access to these tools (all query Supabase directly):
+Your AI tools will now have access to these search capabilities:
 
-| Tool | Description |
+| Tool | What it does |
 |------|-------------|
-| `search_documentation` | Semantic vector search across all documentation |
-| `search_chunks` | Search specific content chunks with section context |
-| `browse_by_category` | Browse documentation by category (dynamic — uses whatever categories you set during ingestion) |
-| `get_all_tags` | List all available tags across your documentation |
+| `search_documentation` | Finds documentation matching your question using semantic search |
+| `search_chunks` | Searches specific sections within documents |
+| `browse_by_category` | Lists documentation by category (from frontmatter or `--category` flag) |
+| `get_all_tags` | Lists all tags across your documentation |
 
 ## 9. Optional: Slack Integration
-
-The deployed Worker includes a `/slack` webhook endpoint for slash commands.
-
-### Create the Slack app
-
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app from scratch
-2. Go to **Slash Commands** > **Create New Command**:
-   - **Command**: `/docs`
-   - **Request URL**: `https://company-docs-mcp.<your-subdomain>.workers.dev/slack`
-   - **Short Description**: Search company documentation
-   - **Usage Hint**: `[search term]`
-3. Go to **OAuth & Permissions** and add these Bot Token Scopes:
-   - `commands`
-   - `chat:write`
-   - `chat:write.public`
-4. Install the app to your workspace and copy the **Bot User OAuth Token** (`xoxb-...`)
-5. Copy the **Signing Secret** from **Basic Information**
-
-### Set Slack secrets on the Worker
 
 ```bash
 echo "xoxb-your-bot-token" | npx wrangler secret put SLACK_BOT_TOKEN
 echo "your-signing-secret" | npx wrangler secret put SLACK_SIGNING_SECRET
 ```
 
-### Test in Slack
+Then team members can search from Slack:
 
 ```
 /docs deployment process
 /docs PTO policy
 ```
 
-See [docs/SLACK_SETUP.md](docs/SLACK_SETUP.md) for details.
+See [docs/SLACK_SETUP.md](docs/SLACK_SETUP.md) for full setup instructions.
 
 ## Troubleshooting
 
-**No results from search**
-- Confirm `npx company-docs publish` completed without errors
-- Check that `.env` has the correct Supabase credentials
-- Run `npx company-docs publish --dry-run` to inspect entries
+**Authentication error when publishing** — Run `npx wrangler login` again (sessions expire periodically).
 
-**Embedding errors during publish**
-- Verify `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` are set in `.env`
-- Test your token: `curl -H "Authorization: Bearer YOUR_TOKEN" https://api.cloudflare.com/client/v4/user/tokens/verify`
+**No results from search** — Check that `npx company-docs publish` completed without errors and that your `.env` has the correct Supabase credentials.
 
-**Wrangler login fails**
-- Check for a `CLOUDFLARE_API_TOKEN` in your environment that may conflict with OAuth
-- Comment it out, run `wrangler login`, then restore it
-
-**MCP client not connecting**
-- Ensure the Worker is deployed and reachable
-- Use the `/mcp` path in the connector URL, not the root
-- Restart your MCP client after adding the connector
-
-**Slack not responding**
-- Confirm the Request URL in your Slack app points to `https://<your-worker>/slack`
-- Verify `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` are set as Worker secrets
-- Check Worker logs with `npx wrangler tail`
+**MCP client not connecting** — Make sure the Worker is deployed, use the `/mcp` path in the URL, and restart your MCP client after adding the connector.
 
 ## Next Steps
 
-- [README.md](./README.md) — full documentation, architecture, and CLI reference
+- [README.md](./README.md) — full documentation, architecture diagram, and CLI reference
 - [docs/BRANDING.md](./docs/BRANDING.md) — customize the chat interface
 - [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) — production deployment details
 - [docs/SLACK_SETUP.md](./docs/SLACK_SETUP.md) — Slack integration reference
