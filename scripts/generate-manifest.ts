@@ -17,7 +17,7 @@ const CONTENT_DIR = path.join(process.cwd(), "content");
 const ENTRIES_DIR = path.join(CONTENT_DIR, "entries");
 const MANIFEST_PATH = path.join(CONTENT_DIR, "manifest.json");
 
-async function main() {
+export async function main() {
 	try {
 		await fs.stat(ENTRIES_DIR);
 	} catch {
@@ -43,7 +43,10 @@ async function main() {
 	console.log(`Manifest generated: ${jsonFiles.length} entries → content/manifest.json`);
 }
 
-main().catch((err) => {
-	console.error("Fatal error:", err);
-	process.exit(1);
-});
+// Run directly when not invoked via the CLI router
+if (!process.env.__COMPANY_DOCS_CLI) {
+	main().catch((err) => {
+		console.error("Fatal error:", err);
+		process.exit(1);
+	});
+}

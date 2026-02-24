@@ -11,59 +11,12 @@
  *   npm run ingest:supabase -- --dry-run # preview what would happen
  */
 
-import "dotenv/config";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import type { ContentEntry } from "../../src/lib/content";
-
-// ---------------------------------------------------------------------------
-// CLI flags
-// ---------------------------------------------------------------------------
-
-const args = new Set(process.argv.slice(2));
-const FLAG_CLEAR = args.has("--clear");
-const FLAG_DRY_RUN = args.has("--dry-run");
-const FLAG_VERBOSE = args.has("--verbose") || args.has("-v");
-
-if (args.has("--help") || args.has("-h")) {
-	console.log(`
-Usage: npm run ingest:supabase -- [options]
-
-Options:
-  --clear      Delete all existing data before ingesting (destructive!)
-  --dry-run    Preview changes without writing to the database
-  --verbose    Show detailed per-entry progress
-  --help       Show this help message
-
-By default the script performs an incremental upsert — only entries whose
-content has changed since the last ingestion are re-embedded and uploaded.
-`);
-	process.exit(0);
-}
-
-// ---------------------------------------------------------------------------
-// Environment validation
-// ---------------------------------------------------------------------------
-
-function requireEnv(key: string): string {
-	const val = process.env[key];
-	if (!val) {
-		console.error(`Missing required environment variable: ${key}`);
-		process.exit(1);
-	}
-	return val;
-}
-
-const SUPABASE_URL = requireEnv("SUPABASE_URL");
-const SUPABASE_KEY =
-	process.env.SUPABASE_SERVICE_KEY || requireEnv("SUPABASE_ANON_KEY");
-const OPENAI_API_KEY = requireEnv("OPENAI_API_KEY");
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -77,93 +30,23 @@ const MAX_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 1000;
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Pure helpers (no external state)
 // ---------------------------------------------------------------------------
+
+function requireEnv(key: string): string {
+	const val = process.env[key];
+	if (!val) {
+		console.error(`Missing required environment variable: ${key}`);
+		process.exit(1);
+	}
+	return val;
+}
 
 /** SHA-256 content hash for change detection */
 function contentHash(entry: ContentEntry): string {
 	return createHash("sha256")
 		.update(`${entry.title}\n${entry.content}`)
 		.digest("hex");
-}
-
-/** Retry wrapper with exponential backoff for transient / rate-limit errors */
-async function withRetry<T>(
-	fn: () => Promise<T>,
-	label: string,
-): Promise<T> {
-	let lastError: unknown;
-	for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-		try {
-			return await fn();
-		} catch (err: any) {
-			lastError = err;
-			const isRetryable =
-				err?.status === 429 ||
-				err?.code === "ECONNRESET" ||
-				err?.code === "ETIMEDOUT" ||
-				err?.message?.includes("rate limit") ||
-				err?.message?.includes("timeout");
-			if (!isRetryable || attempt === MAX_RETRIES) throw err;
-
-			const delay = BASE_RETRY_DELAY_MS * 2 ** (attempt - 1);
-			if (FLAG_VERBOSE)
-				console.log(
-					`  Retry ${attempt}/${MAX_RETRIES} for ${label} in ${delay}ms`,
-				);
-			await new Promise((r) => setTimeout(r, delay));
-		}
-	}
-	throw lastError;
-}
-
-/** Generate an embedding and validate its dimensions */
-async function generateEmbedding(text: string, label: string): Promise<number[]> {
-	const input = text.slice(0, MAX_EMBEDDING_INPUT);
-	const response = await withRetry(
-		() => openai.embeddings.create({ model: EMBEDDING_MODEL, input }),
-		label,
-	);
-	const embedding = response.data[0].embedding;
-
-	if (embedding.length !== EMBEDDING_DIM) {
-		throw new Error(
-			`Embedding for "${label}" has ${embedding.length} dimensions (expected ${EMBEDDING_DIM})`,
-		);
-	}
-
-	return embedding;
-}
-
-/** Load content entries from content/entries/ directory (Node.js filesystem) */
-async function loadEntriesFromDisk(): Promise<ContentEntry[]> {
-	const entriesDir = path.join(process.cwd(), "content", "entries");
-	const entries: ContentEntry[] = [];
-
-	try {
-		const files = await fs.readdir(entriesDir);
-		const jsonFiles = files.filter((f) => f.endsWith(".json"));
-
-		for (const file of jsonFiles) {
-			try {
-				const raw = await fs.readFile(path.join(entriesDir, file), "utf-8");
-				const entry = JSON.parse(raw) as ContentEntry;
-				if (entry?.id && entry?.title && entry?.content) {
-					entries.push(entry);
-				} else if (FLAG_VERBOSE) {
-					console.log(`  [skip] ${file} — missing required fields`);
-				}
-			} catch (err: any) {
-				console.error(`  [warn] Failed to parse ${file}: ${err.message}`);
-			}
-		}
-	} catch {
-		console.error(`No content/entries/ directory found at ${entriesDir}`);
-		console.error("Run an ingestion command first (e.g., npm run ingest:markdown)");
-		process.exit(1);
-	}
-
-	return entries;
 }
 
 /** Split text into sentence-aware chunks */
@@ -189,7 +72,121 @@ function chunkText(text: string, chunkSize = 1000): string[] {
 // Core pipeline
 // ---------------------------------------------------------------------------
 
-async function main() {
+export async function main() {
+	// Load .env at call time so other CLI commands don't trigger side effects
+	await import("dotenv/config");
+
+	// Parse CLI flags
+	const args = new Set(process.argv.slice(2));
+	const FLAG_CLEAR = args.has("--clear");
+	const FLAG_DRY_RUN = args.has("--dry-run");
+	const FLAG_VERBOSE = args.has("--verbose") || args.has("-v");
+
+	if (args.has("--help") || args.has("-h")) {
+		console.log(`
+Usage: npx company-docs ingest supabase [options]
+
+Options:
+  --clear      Delete all existing data before ingesting (destructive!)
+  --dry-run    Preview changes without writing to the database
+  --verbose    Show detailed per-entry progress
+  --help       Show this help message
+
+By default the script performs an incremental upsert — only entries whose
+content has changed since the last ingestion are re-embedded and uploaded.
+`);
+		process.exit(0);
+	}
+
+	// Init clients
+	const SUPABASE_URL = requireEnv("SUPABASE_URL");
+	const SUPABASE_KEY =
+		process.env.SUPABASE_SERVICE_KEY || requireEnv("SUPABASE_ANON_KEY");
+	const OPENAI_API_KEY = requireEnv("OPENAI_API_KEY");
+
+	const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+	const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+	// -- Helpers that close over openai / FLAG_VERBOSE -----------------------
+
+	async function withRetry<T>(
+		fn: () => Promise<T>,
+		label: string,
+	): Promise<T> {
+		let lastError: unknown;
+		for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+			try {
+				return await fn();
+			} catch (err: any) {
+				lastError = err;
+				const isRetryable =
+					err?.status === 429 ||
+					err?.code === "ECONNRESET" ||
+					err?.code === "ETIMEDOUT" ||
+					err?.message?.includes("rate limit") ||
+					err?.message?.includes("timeout");
+				if (!isRetryable || attempt === MAX_RETRIES) throw err;
+
+				const delay = BASE_RETRY_DELAY_MS * 2 ** (attempt - 1);
+				if (FLAG_VERBOSE)
+					console.log(
+						`  Retry ${attempt}/${MAX_RETRIES} for ${label} in ${delay}ms`,
+					);
+				await new Promise((r) => setTimeout(r, delay));
+			}
+		}
+		throw lastError;
+	}
+
+	async function generateEmbedding(text: string, label: string): Promise<number[]> {
+		const input = text.slice(0, MAX_EMBEDDING_INPUT);
+		const response = await withRetry(
+			() => openai.embeddings.create({ model: EMBEDDING_MODEL, input }),
+			label,
+		);
+		const embedding = response.data[0].embedding;
+
+		if (embedding.length !== EMBEDDING_DIM) {
+			throw new Error(
+				`Embedding for "${label}" has ${embedding.length} dimensions (expected ${EMBEDDING_DIM})`,
+			);
+		}
+
+		return embedding;
+	}
+
+	async function loadEntriesFromDisk(): Promise<ContentEntry[]> {
+		const entriesDir = path.join(process.cwd(), "content", "entries");
+		const entries: ContentEntry[] = [];
+
+		try {
+			const files = await fs.readdir(entriesDir);
+			const jsonFiles = files.filter((f) => f.endsWith(".json"));
+
+			for (const file of jsonFiles) {
+				try {
+					const raw = await fs.readFile(path.join(entriesDir, file), "utf-8");
+					const entry = JSON.parse(raw) as ContentEntry;
+					if (entry?.id && entry?.title && entry?.content) {
+						entries.push(entry);
+					} else if (FLAG_VERBOSE) {
+						console.log(`  [skip] ${file} — missing required fields`);
+					}
+				} catch (err: any) {
+					console.error(`  [warn] Failed to parse ${file}: ${err.message}`);
+				}
+			}
+		} catch {
+			console.error(`No content/entries/ directory found at ${entriesDir}`);
+			console.error("Run an ingestion command first (e.g., npm run ingest:markdown)");
+			process.exit(1);
+		}
+
+		return entries;
+	}
+
+	// -- Main pipeline -------------------------------------------------------
+
 	console.log("Starting Supabase vector ingestion");
 	if (FLAG_DRY_RUN) console.log("  DRY RUN — no writes will be performed");
 	if (FLAG_CLEAR) console.log("  CLEAR mode — existing data will be deleted");
@@ -383,7 +380,10 @@ async function main() {
 	}
 }
 
-main().catch((err) => {
-	console.error("Fatal error:", err);
-	process.exit(1);
-});
+// Run directly when not invoked via the CLI router
+if (!process.env.__COMPANY_DOCS_CLI) {
+	main().catch((err) => {
+		console.error("Fatal error:", err);
+		process.exit(1);
+	});
+}

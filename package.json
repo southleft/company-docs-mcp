@@ -4,6 +4,14 @@
 	"description": "Self-hosted MCP server for organization documentation",
 	"private": false,
 	"type": "module",
+	"bin": {
+		"company-docs": "./dist/cli.js"
+	},
+	"files": [
+		"dist/",
+		"database/schema.sql",
+		"README.md"
+	],
 	"scripts": {
 		"deploy": "wrangler deploy",
 		"deploy:local": "wrangler deploy -c wrangler.toml.local",
@@ -36,7 +44,9 @@
 		"slack:deploy": "tsx scripts/deploy-slack.ts",
 		"db:setup": "tsx scripts/setup-database.ts",
 		"db:setup:sql": "tsx scripts/setup-database.ts --sql-only",
-		"db:migrate": "tsx scripts/migrate-database.ts"
+		"db:migrate": "tsx scripts/migrate-database.ts",
+		"build:cli": "node build-cli.mjs",
+		"prepublishOnly": "npm run build:cli"
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.22.0",
@@ -60,6 +70,7 @@
 		"@typescript-eslint/parser": "^8.18.2",
 		"eslint": "^9.18.0",
 		"node-fetch": "^2.7.0",
+		"esbuild": "^0.24.0",
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.2",
 		"vitest": "^4.0.18",

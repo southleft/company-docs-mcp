@@ -113,7 +113,7 @@ async function saveRawMarkdown(sourcePath: string, content: string): Promise<voi
 }
 
 // Main function
-async function main() {
+export async function main() {
   const args = parseArgs();
   
   if (args.help) {
@@ -199,8 +199,8 @@ async function main() {
 // Export for use as a module
 export { getMarkdownFiles, parseArgs };
 
-// Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run directly when not invoked via the CLI router
+if (!process.env.__COMPANY_DOCS_CLI) {
   main().catch(error => {
     console.error('Fatal error:', error);
     process.exit(1);
