@@ -88,7 +88,7 @@ async function search(
 ): Promise<ContentEntry[]> {
   await ensureContentLoaded();
   return searchWithSupabase(
-    { query, category: opts.category, tags: opts.tags, limit: opts.limit ?? 15 },
+    { query, category: opts.category, tags: opts.tags, limit: opts.limit ?? 5 },
     env
   );
 }
@@ -96,28 +96,38 @@ async function search(
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
+function cleanContentForMcp(content: string): string {
+  // Strip YAML frontmatter if present
+  let text = content.replace(/^---\s*\n[\s\S]*?\n---\s*\n/, '');
+  // Collapse excessive blank lines
+  text = text.replace(/\n{4,}/g, '\n\n\n');
+  return text.trim();
+}
+
 function formatSearchResults(results: ContentEntry[]): string {
   if (results.length === 0) {
     return "No documentation found matching your search criteria.";
   }
 
   const formatted = results
-    .map((entry, i) => {
-      const source = entry.source?.location || entry.metadata?.source_url || "N/A";
-      return `**${i + 1}. ${entry.title}**
+    .map((entry) => {
+      const source = entry.source?.location || entry.metadata?.source_url || "";
+      const content = cleanContentForMcp(entry.content);
 
-Category: ${entry.metadata.category}
-Tags: ${entry.metadata.tags.join(", ")}
-Confidence: ${entry.metadata.confidence}
-Source: [${source}](${source})
+      // Skip the title line if the content already starts with a heading matching it
+      const titlePattern = new RegExp(`^#\\s+${entry.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'm');
+      const body = titlePattern.test(content) ? content : `# ${entry.title}\n\n${content}`;
 
-${entry.content.slice(0, 1000)}${entry.content.length > 1000 ? "..." : ""}
+      const meta: string[] = [];
+      if (entry.metadata.category) meta.push(`Category: ${entry.metadata.category}`);
+      if (entry.metadata.tags?.length) meta.push(`Tags: ${entry.metadata.tags.join(", ")}`);
+      if (source) meta.push(`Source: ${source}`);
 
----`;
+      return `${body}${meta.length > 0 ? `\n\n> ${meta.join(" | ")}` : ""}`;
     })
-    .join("\n\n");
+    .join("\n\n---\n\n");
 
-  return `Found ${results.length} documentation entries:\n\n${formatted}`;
+  return formatted;
 }
 
 function formatChunkResults(
@@ -128,21 +138,17 @@ function formatChunkResults(
   }
 
   const formatted = results
-    .map((result, i) => {
+    .map((result) => {
       const { displayName, url } = formatSourceReference(result.entry);
-      const sourceLink = url ? `[${displayName}](${url})` : displayName;
-      const cleanText = result.chunk.text
-        .replace(/^[-*•]\s*/gm, "")
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
+      const sourceRef = url ? `Source: [${displayName}](${url})` : `Source: ${displayName}`;
+      const cleanText = cleanContentForMcp(result.chunk.text);
+      const section = result.chunk.metadata?.section || result.entry.title || "Documentation";
 
-      return `**${result.chunk.metadata?.section || "Insight"}** from ${sourceLink}
-
-${cleanText}`;
+      return `## ${section}\n\n${cleanText}\n\n> ${sourceRef}`;
     })
     .join("\n\n---\n\n");
 
-  return `Found ${results.length} content chunks:\n\n${formatted}`;
+  return formatted;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,8 +170,8 @@ export function registerTools(server: McpServer, env: Env): void {
         .number()
         .min(1)
         .max(50)
-        .default(15)
-        .describe("Maximum number of results to return (default: 15)"),
+        .default(5)
+        .describe("Maximum number of results to return (default: 5)"),
     },
     async ({ query, category, tags, limit }) => {
       const results = await search(query, env, { category, tags, limit });
@@ -185,8 +191,8 @@ export function registerTools(server: McpServer, env: Env): void {
         .number()
         .min(1)
         .max(20)
-        .default(8)
-        .describe("Maximum number of chunks to return (default: 8)"),
+        .default(5)
+        .describe("Maximum number of chunks to return (default: 5)"),
     },
     async ({ query, limit }) => {
       // Try Supabase first for chunk search
@@ -280,7 +286,7 @@ export const OPENAI_TOOLS = [
         properties: {
           query: { type: "string", description: "Search query" },
           category: { type: "string", description: "Filter by category (optional)" },
-          limit: { type: "number", description: "Maximum number of results (default: 25)" },
+          limit: { type: "number", description: "Maximum number of results (default: 5)" },
         },
         required: ["query"],
       },
@@ -295,7 +301,7 @@ export const OPENAI_TOOLS = [
         type: "object",
         properties: {
           query: { type: "string", description: "Search query for specific information" },
-          limit: { type: "number", description: "Maximum number of chunks (default: 12)" },
+          limit: { type: "number", description: "Maximum number of chunks (default: 5)" },
         },
         required: ["query"],
       },
@@ -317,20 +323,20 @@ export async function executeTool(
     case "search_documentation": {
       const results = await search(String(args.query || ""), env, {
         category: args.category as string | undefined,
-        limit: (args.limit as number) || 25,
+        limit: (args.limit as number) || 5,
       });
       return formatSearchResults(results);
     }
 
     case "search_chunks": {
       const results = await search(String(args.query || ""), env, {
-        limit: (args.limit as number) || 12,
+        limit: (args.limit as number) || 5,
       });
 
       if (results.length > 0) return formatSearchResults(results);
 
       // Fall back to local chunk search
-      const chunkResults = searchChunksLocal(String(args.query || ""), (args.limit as number) || 12, {
+      const chunkResults = searchChunksLocal(String(args.query || ""), (args.limit as number) || 5, {
         enableDiversity: true,
         maxPerSource: 2,
         preferUrls: true,

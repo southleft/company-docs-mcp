@@ -117,10 +117,12 @@ async function handleAiChatInternal(request: Request, env: Env): Promise<Respons
 
     // Handle tool calls
     if (response.tool_calls && response.tool_calls.length > 0) {
+      // Strip any intermediate "thinking" content — only the final response matters
+      const assistantMsg = { ...response, content: null } as any;
       const messages: any[] = [
         { role: "system", content: getSystemPrompt(orgName) },
         { role: "user", content: message },
-        response,
+        assistantMsg,
       ];
 
       // Execute each tool call

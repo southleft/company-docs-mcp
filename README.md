@@ -206,6 +206,9 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
 
+[ai]
+binding = "AI"
+
 [vars]
 ORGANIZATION_NAME = "Your Organization"
 VECTOR_SEARCH_ENABLED = "true"
@@ -281,13 +284,15 @@ npm run ingest:pdf ./document.pdf
 
 ## Optional: Slack Integration
 
-The MCP server includes a Slack bot that lets team members query documentation with slash commands:
+The MCP server includes a Slack slash command that lets team members query documentation:
 
 ```
 /docs deployment process
 /docs PTO policy
 /docs how to set up staging
 ```
+
+Responses use a three-tier AI strategy for reliability: OpenAI (primary) → Cloudflare Workers AI (fallback) → formatted raw content. Results are automatically formatted for Slack with proper mrkdwn, bullet lists, and code blocks.
 
 See [docs/SLACK_SETUP.md](docs/SLACK_SETUP.md) for setup instructions.
 
