@@ -1,19 +1,16 @@
-# Security Key Rotation Guide
+# Secret Management and Key Rotation Guide
 
-## ⚠️ CRITICAL SECURITY NOTICE
+## Overview
 
-**If you cloned this repository before [DATE], your API keys may have been exposed in version control.**
+This guide covers how to manage secrets securely and rotate credentials when needed. All sensitive values (API keys, database credentials) should be stored as Cloudflare Worker secrets or in local `.env`/`.dev.vars` files that are excluded from version control.
 
-The following credentials were accidentally committed to `wrangler.toml` and need to be rotated immediately:
+If you suspect any credentials have been exposed, rotate them immediately using the steps below.
 
-- OpenAI API Key
-- Supabase URL and Keys (Anon Key, Service Role Key)
-
-## Immediate Actions Required
+## Rotating Credentials
 
 ### 1. Rotate OpenAI API Key
 
-**Why:** The OpenAI API key has spending limits and usage tracking. Exposed keys can lead to unauthorized usage and unexpected charges.
+**Why:** Exposed keys can lead to unauthorized usage and unexpected charges.
 
 **Steps:**
 
@@ -172,12 +169,11 @@ brew install bfg  # macOS
 
 # Clone a fresh copy
 cd /tmp
-git clone --mirror https://github.com/yourorg/company-docs-mcp.git
+git clone --mirror https://github.com/your-org/company-docs-mcp.git
 
 # Remove sensitive data
 cd company-docs-mcp.git
-bfg --replace-text <(echo 'sk-proj-*===>REMOVED')
-bfg --replace-text <(echo 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9*===>REMOVED')
+bfg --replace-text <(echo 'your-exposed-key-pattern===>REMOVED')
 
 # Cleanup and push
 git reflog expire --expire=now --all

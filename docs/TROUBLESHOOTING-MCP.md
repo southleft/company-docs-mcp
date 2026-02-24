@@ -4,8 +4,8 @@
 
 If your Company Docs MCP isn't showing up in Claude Desktop, follow these steps:
 
-### Understanding the Problem
-Claude Desktop does NOT support remote MCP servers directly via a `"url"` property. It only supports local processes that it can start via `"command"` and `"args"`. To connect to a remote MCP server, you need a local bridge/proxy process.
+### Understanding MCP Connections
+Claude Desktop supports remote MCP servers via its **Connectors** feature (Settings > Connectors > Add custom connector). You can also use a local bridge process for older setups.
 
 ### 1. Verify Worker is Deployed
 
@@ -26,9 +26,17 @@ curl -X POST https://company-docs-mcp.your-subdomain.workers.dev/mcp \
 
 You should see a JSON response with server information.
 
-### 2. Choose a Connection Method
+### 2. Connect via Claude Desktop Connector (Recommended)
 
-#### Method A: Using mcp-remote Package (Simplest)
+1. Open **Claude Desktop** > **Settings** > **Connectors**
+2. Click **Add custom connector**
+3. Set the URL to: `https://company-docs-mcp.<your-subdomain>.workers.dev/mcp`
+4. Click **Add**
+
+### Alternative: Using mcp-remote (Older Claude Desktop Versions)
+
+If your Claude Desktop version does not support connectors, use a local bridge:
+
 ```json
 {
   "mcpServers": {
@@ -37,37 +45,7 @@ You should see a JSON response with server information.
       "args": [
         "-y",
         "mcp-remote@latest",
-        "https://company-docs-mcp.your-subdomain.workers.dev/mcp"
-      ]
-    }
-  }
-}
-```
-
-#### Method B: Using Standalone Client (Most Reliable)
-1. Ensure you have the `standalone-mcp-client.cjs` file
-2. Add to config:
-```json
-{
-  "mcpServers": {
-    "Company Docs": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/standalone-mcp-client.cjs"
-      ]
-    }
-  }
-}
-```
-
-#### Method C: Using Full Node Path (If Node Not in PATH)
-```json
-{
-  "mcpServers": {
-    "Company Docs": {
-      "command": "/usr/local/bin/node",
-      "args": [
-        "/absolute/path/to/standalone-mcp-client.cjs"
+        "https://company-docs-mcp.<your-subdomain>.workers.dev/mcp"
       ]
     }
   }
@@ -113,7 +91,7 @@ After updating the configuration:
 
 1. Start a new conversation
 2. You should see tools like:
-   - `search_design_knowledge`
+   - `search_documentation`
    - `search_chunks`
    - `browse_by_category`
    - `get_all_tags`
@@ -121,18 +99,16 @@ After updating the configuration:
 ### 7. Common Issues and Solutions
 
 **Issue: "Unknown MCP" or MCP not listed**
-- Solution: You're likely using `"url"` instead of `"command"`. Use one of the methods above.
-
-**Issue: "Command not found" error**
-- Solution: Use full path to node executable (e.g., `/usr/local/bin/node`)
+- If using connectors, verify the URL ends with `/mcp`
+- If using mcp-remote, ensure `"command"` and `"args"` are used (not `"url"`)
 
 **Issue: MCP appears but tools don't work**
 - Check worker logs: `npx wrangler tail`
-- Verify Supabase credentials are set in wrangler.toml
+- Verify Supabase credentials are set as Worker secrets
 - Ensure content has been ingested to Supabase
 
 **Issue: Connection timeout**
-- The mcp-remote package may take a moment to download on first run
+- If using mcp-remote, it may take a moment to download on first run
 - Try running the npx command manually first to cache it
 
 ### 8. Debug with Logs
@@ -155,16 +131,15 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | \
 
 ### Important Notes
 
-- **DO NOT** use `"url"` property - Claude Desktop doesn't support it
-- **ALWAYS** use `"command"` and `"args"` format
+- The preferred method is **Claude Desktop Connectors** (Settings > Connectors)
 - The remote server must be accessible via HTTPS
-- The `/mcp` endpoint must handle MCP JSON-RPC protocol
+- The `/mcp` endpoint must handle MCP Streamable HTTP protocol
 
 ### Need More Help?
 
 If you're still having issues:
 
 1. Verify the server responds: Test with curl commands above
-2. Check that Node.js is installed: `node --version`
-3. Try the standalone client method as it's most reliable
-4. Check [GitHub Issues](https://github.com/your-org/company-docs-mcp/issues)
+2. Check worker logs: `npx wrangler tail`
+3. Review the [Deployment Guide](./DEPLOYMENT.md)
+4. Check [GitHub Issues](https://github.com/southleft/company-docs-mcp/issues)

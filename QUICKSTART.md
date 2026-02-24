@@ -1,290 +1,192 @@
-# 🚀 Quick Start Guide
+# Quick Start Guide
 
-Get your organization's documentation assistant running in **under 15 minutes**!
+Get Company Docs MCP running: ingest your markdown, deploy the MCP server, and connect it to Claude Desktop.
 
 ## Prerequisites
 
-Before starting, ensure you have:
-- ✅ Node.js 18+ installed ([download here](https://nodejs.org/))
-- ✅ A [Supabase account](https://supabase.com) (free tier works great)
-- ✅ An [OpenAI API key](https://platform.openai.com/api-keys) for embeddings
-- ✅ (Optional) [Cloudflare account](https://dash.cloudflare.com/sign-up) for deployment
-- ✅ (Optional) Slack workspace admin access for bot integration
+- [Node.js 18+](https://nodejs.org/)
+- [Supabase account](https://supabase.com) (free tier works)
+- [OpenAI API key](https://platform.openai.com/api-keys) for generating embeddings
+- [Cloudflare account](https://dash.cloudflare.com/sign-up) for deploying the Worker
 
-## Step 1: Clone & Install (2 minutes)
+## 1. Install
 
 ```bash
-# Clone the repository
-git clone https://github.com/southleft/company-docs-mcp.git  # or your fork
+npm install company-docs-mcp
+```
+
+## 2. Set Up Supabase
+
+1. Create a new project at [supabase.com](https://supabase.com)
+2. Go to **Settings > API** and copy your **Project URL**, **anon key**, and **service_role key**
+3. Open the **SQL Editor**, paste the contents of [`database/schema.sql`](database/schema.sql), and run it
+
+The schema file is included in the npm package at `node_modules/company-docs-mcp/database/schema.sql`.
+
+## 3. Configure Environment
+
+Create a `.env` file in your project root:
+
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_KEY=eyJ...
+OPENAI_API_KEY=sk-...
+```
+
+## 4. Write Your Documentation
+
+Create markdown files in a directory. Any structure works:
+
+```
+docs/
+├── onboarding/
+│   └── new-hire-checklist.md
+├── engineering/
+│   └── deployment-guide.md
+└── policies/
+    └── pto-policy.md
+```
+
+## 5. Ingest and Publish
+
+```bash
+# Parse markdown files into structured entries
+npx company-docs ingest markdown --dir=./docs
+
+# Push entries to Supabase with vector embeddings
+npx company-docs publish
+```
+
+To preview what would be published without writing to the database:
+
+```bash
+npx company-docs publish --dry-run
+```
+
+Re-run these commands any time your docs change. The system uses content hashing -- only changed entries are re-embedded.
+
+## 6. Deploy the Cloudflare Worker
+
+The npm package handles ingestion. To serve the MCP endpoint, deploy the Cloudflare Worker from the repository.
+
+### Clone and install
+
+```bash
+git clone https://github.com/southleft/company-docs-mcp.git
 cd company-docs-mcp
-
-# Install dependencies
 npm install
-
-# Copy the example environment file
-cp .env.example .env
 ```
 
-## Step 2: Set Up Supabase (5 minutes)
+### Configure wrangler.toml
 
-### Create a Supabase Project
+```toml
+name = "company-docs-mcp"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
 
-1. Go to [supabase.com](https://supabase.com) and create a new project
-2. Wait for the project to initialize (takes ~2 minutes)
-3. Navigate to **Settings → API** in your Supabase dashboard
-4. Copy these values to your `.env` file:
-   - **Project URL** → `SUPABASE_URL`
-   - **anon public** key → `SUPABASE_ANON_KEY`
-   - **service_role** key → `SUPABASE_SERVICE_KEY`
+[ai]
+binding = "AI"
 
-### Initialize the Database
+[vars]
+ORGANIZATION_NAME = "Your Organization"
+VECTOR_SEARCH_ENABLED = "true"
+VECTOR_SEARCH_MODE = "vector"
+```
 
-Run this command to create the required tables:
+### Set secrets
 
 ```bash
-npm run db:setup
+echo "your-openai-api-key" | npx wrangler secret put OPENAI_API_KEY
+echo "your-supabase-url" | npx wrangler secret put SUPABASE_URL
+echo "your-service-key" | npx wrangler secret put SUPABASE_SERVICE_KEY
 ```
 
-This will display SQL that you need to run in Supabase:
-1. Go to your Supabase Dashboard → **SQL Editor**
-2. Click **New query**
-3. Paste the SQL from the command output
-4. Click **Run**
+### Deploy
 
-## Step 3: Configure Your Organization (2 minutes)
-
-Edit your `.env` file with your organization's details:
-
-```bash
-# Organization Configuration
-ORGANIZATION_NAME="Your Company Name"
-ORGANIZATION_DOMAIN="yourcompany.com"
-
-# Optional Branding
-ORGANIZATION_LOGO_URL="https://yourcompany.com/logo.png"
-ORGANIZATION_SUBTITLE="Your AI Documentation Assistant"
-ORGANIZATION_TAGLINE="Get instant answers about our products and APIs"
-
-# OpenAI Configuration (required for embeddings)
-OPENAI_API_KEY="sk-..."  # Get from https://platform.openai.com/api-keys
-```
-
-## Step 4: Add Your Documentation (3 minutes)
-
-Choose one or more methods to import your documentation:
-
-### Option A: Markdown Files
-If you have documentation in markdown files:
-```bash
-npm run ingest:markdown -- --dir=./path/to/your/docs
-```
-
-### Option B: Website
-To scrape documentation from a website:
-```bash
-npm run ingest:web -- https://docs.yourcompany.com
-```
-
-### Option C: GitHub Repository
-For documentation in a GitHub repo:
-```bash
-npm run ingest:github -- --repo=your-org/docs-repo
-```
-
-### Generate Search Embeddings
-After importing content, generate embeddings for AI search:
-```bash
-npm run ingest:supabase
-```
-
-## Step 5: Test Locally (2 minutes)
-
-Start the development server:
-```bash
-npm run dev
-```
-
-Open your browser to:
-- **Chat Interface**: http://localhost:8787
-- **Health Check**: http://localhost:8787/health
-
-Try asking questions like:
-- "How do I get started?"
-- "What are the API endpoints?"
-- "Show me authentication examples"
-
-## Step 6: Connect to Claude Desktop
-
-**Important:** Claude Desktop does NOT support remote MCP servers directly via a "url" property. You need to use a local bridge process.
-
-### Option A: Using mcp-remote Package (Recommended)
-
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
-
-```json
-{
-  "mcpServers": {
-    "Company Docs": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote@latest",
-        "https://company-docs-mcp.your-subdomain.workers.dev/mcp"
-      ]
-    }
-  }
-}
-```
-
-**Note:** Replace `your-subdomain` with your actual Cloudflare Workers subdomain from `npm run deploy` output.
-
-### Option B: Using Standalone Client (Most Reliable)
-
-1. Copy the standalone client:
-```bash
-cp standalone-mcp-client.cjs /path/to/your/preferred/location/
-# Edit the file to update the MCP_SERVER_URL to your deployed URL
-```
-
-2. Add to Claude Desktop config:
-```json
-{
-  "mcpServers": {
-    "Company Docs": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/standalone-mcp-client.cjs"
-      ]
-    }
-  }
-}
-```
-
-### Option C: Local Development Mode
-
-For local development only (requires `npm run dev` to be running):
-
-```json
-{
-  "mcpServers": {
-    "company-docs": {
-      "command": "node",
-      "args": ["/absolute/path/to/company-docs-mcp/dist/index.js"],
-      "env": {
-        "SUPABASE_URL": "your-supabase-url",
-        "SUPABASE_ANON_KEY": "your-anon-key",
-        "OPENAI_API_KEY": "your-openai-key"
-      }
-    }
-  }
-}
-```
-
-**Restart Claude Desktop** to load the MCP server.
-
-## Step 7: Deploy to Cloudflare (Optional)
-
-First deploy to Cloudflare:
 ```bash
 npm run deploy
 ```
 
-Your MCP server will be available at: `https://company-docs-mcp.<your-subdomain>.workers.dev`
+Your MCP server will be available at `https://company-docs-mcp.<your-subdomain>.workers.dev`.
 
-## Step 8: Set Up Slack Bot (Optional, 5 minutes)
+## 7. Connect Claude Desktop
 
-### Create Slack App
+1. Open **Claude Desktop** > **Settings** > **Connectors**
+2. Click **Add custom connector**
+3. Set the **URL** to `https://company-docs-mcp.<your-subdomain>.workers.dev/mcp`
+4. Click **Add**
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) and click **Create New App**
-2. Choose **From scratch**
-3. Name it (e.g., "Docs Assistant") and select your workspace
+Claude will now have access to these tools:
 
-### Configure Bot
+| Tool | Description |
+|------|-------------|
+| `search_documentation` | Semantic search across all documentation |
+| `search_chunks` | Search specific content chunks |
+| `browse_by_category` | Browse documentation by category |
+| `get_all_tags` | List all available tags |
 
-1. Go to **OAuth & Permissions** → Add these Bot Token Scopes:
+## 8. Optional: Slack Integration
+
+The deployed Worker includes a `/slack` webhook endpoint for Slack slash commands. This uses standard HTTP webhooks, not Socket Mode.
+
+### Create the Slack app
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app from scratch
+2. Go to **Slash Commands** > **Create New Command**:
+   - **Command**: `/docs`
+   - **Request URL**: `https://company-docs-mcp.<your-subdomain>.workers.dev/slack`
+   - **Short Description**: Search company documentation
+   - **Usage Hint**: `[search term]`
+3. Go to **OAuth & Permissions** and add these Bot Token Scopes:
    - `commands`
    - `chat:write`
    - `chat:write.public`
+4. Install the app to your workspace and copy the **Bot User OAuth Token** (`xoxb-...`)
+5. Copy the **Signing Secret** from **Basic Information**
 
-2. Go to **Socket Mode** → Enable Socket Mode
-   - Generate an **App-Level Token** with `connections:write` scope
-   - Copy the token (starts with `xapp-`)
+### Set Slack secrets on the Worker
 
-3. Go to **Slash Commands** → Create New Command:
-   - Command: `/docs`
-   - Short Description: "Search documentation"
-   - Usage Hint: "[your search query]"
-
-4. **Install App to Workspace** (in OAuth & Permissions)
-   - Copy the **Bot User OAuth Token** (starts with `xoxb-`)
-
-### Configure Environment
-
-Add to your `.env`:
 ```bash
-SLACK_BOT_TOKEN="xoxb-..."  # Bot User OAuth Token
-SLACK_APP_TOKEN="xapp-..."  # App-Level Token
-SLACK_SIGNING_SECRET="..."  # From Basic Information page
-ENABLE_SLACK_BOT=true
+echo "xoxb-your-bot-token" | npx wrangler secret put SLACK_BOT_TOKEN
+echo "your-signing-secret" | npx wrangler secret put SLACK_SIGNING_SECRET
 ```
 
-### Run the Bot
+### Test in Slack
 
-In a new terminal:
-```bash
-npm run slack:start
+```
+/docs deployment process
+/docs PTO policy
 ```
 
-Test in Slack:
-```
-/docs how to get started
-/docs API authentication
-```
-
-## 🎉 You're Done!
-
-Your documentation assistant is now available through:
-- 💬 **Chat UI**: Your branded web interface
-- 🤖 **Claude Desktop**: Direct MCP integration
-- 💼 **Slack**: Team-wide `/docs` commands
-- 🔌 **API**: REST endpoints for custom integrations
+See [docs/SLACK_SETUP.md](docs/SLACK_SETUP.md) for details on local testing and advanced configuration.
 
 ## Troubleshooting
 
-### "No content found"
-- Ensure you've run the ingestion commands in Step 4
-- Check that `npm run ingest:supabase` completed successfully
-- Verify your Supabase credentials are correct
+**No results from search**
+- Confirm `npx company-docs publish` completed without errors
+- Check that `.env` has the correct Supabase credentials
+- Run `npx company-docs publish --dry-run` to inspect entries
 
-### Logo not displaying
-- Ensure the logo URL is publicly accessible (HTTPS)
-- Check browser console for CORS errors
-- Try using a CDN-hosted image
+**Embedding errors**
+- Verify your OpenAI API key is valid and has available credits
 
-### Slack bot not responding
-- Verify Socket Mode is enabled in your Slack app
-- Check that `npm run slack:start` is running
-- Ensure all Slack tokens are correctly set in `.env`
+**Claude Desktop not connecting**
+- Ensure the Worker is deployed and reachable
+- Use the `/mcp` path in the connector URL, not the root
+- Restart Claude Desktop after adding the connector
 
-### Claude Desktop not connecting
-- Ensure you're not using the "url" property (not supported)
-- Use mcp-remote package or standalone client as shown above
-- Completely restart Claude Desktop after updating config
-- Verify your deployed server is accessible
+**Slack not responding**
+- Confirm the Request URL in your Slack app points to `https://<your-worker>/slack`
+- Verify `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` are set as Worker secrets
+- Check Worker logs with `npx wrangler tail`
 
 ## Next Steps
 
-- 📚 Read the [full documentation](./README.md)
-- 🎨 Customize [branding](./docs/BRANDING.md)
-- 🔧 Configure [advanced settings](./docs/CONFIGURATION.md)
-- 🚀 [Deploy to production](./docs/DEPLOYMENT.md)
-- 💬 Set up [Slack integration](./docs/SLACK_SETUP.md)
-
-## Need Help?
-
-- 📖 Check our [documentation](./docs/)
-- 🐛 Report [issues on GitHub](https://github.com/southleft/company-docs-mcp/issues)
-
----
-
-Built with ❤️ using MCP (Model Context Protocol)
+- [README.md](./README.md) -- full documentation and CLI reference
+- [docs/BRANDING.md](./docs/BRANDING.md) -- customize the chat interface
+- [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) -- production deployment details
+- [docs/SLACK_SETUP.md](./docs/SLACK_SETUP.md) -- Slack integration reference
+- [docs/SECURITY_KEY_ROTATION.md](./docs/SECURITY_KEY_ROTATION.md) -- credential rotation
+- [GitHub Issues](https://github.com/southleft/company-docs-mcp/issues) -- report bugs or request features

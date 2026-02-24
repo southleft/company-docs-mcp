@@ -58,9 +58,8 @@ npm run dev
 
 ## Community
 
-- Start discussions in [GitHub Discussions](https://github.com/your-org/company-docs-mcp/discussions)
-- Join our [Discord server](#) for real-time chat
-- Follow updates on [Twitter](#)
+- Start discussions in [GitHub Discussions](https://github.com/southleft/company-docs-mcp/discussions)
+- Report issues on [GitHub Issues](https://github.com/southleft/company-docs-mcp/issues)
 
 ## License
 

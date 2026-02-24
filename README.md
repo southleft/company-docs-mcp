@@ -215,11 +215,22 @@ VECTOR_SEARCH_ENABLED = "true"
 VECTOR_SEARCH_MODE = "vector"
 ```
 
+Create a KV namespace for caching:
+
+```bash
+npx wrangler kv namespace create CONTENT_CACHE
+# Add the returned ID to your wrangler.toml:
+# [[kv_namespaces]]
+# binding = "CONTENT_CACHE"
+# id = "your-kv-namespace-id"
+```
+
 Set secrets:
 
 ```bash
 echo "your-openai-api-key" | npx wrangler secret put OPENAI_API_KEY
 echo "your-supabase-url" | npx wrangler secret put SUPABASE_URL
+echo "your-anon-key" | npx wrangler secret put SUPABASE_ANON_KEY
 echo "your-service-key" | npx wrangler secret put SUPABASE_SERVICE_KEY
 ```
 

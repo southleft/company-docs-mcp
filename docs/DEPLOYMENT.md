@@ -1,384 +1,311 @@
 # Deployment Guide
 
-This guide covers different deployment options for your Company Docs MCP server.
+This guide covers deploying the Company Docs MCP server to Cloudflare Workers, the only supported deployment target.
 
-## Deployment Options
+The MCP server runs as a Cloudflare Worker that handles search queries, MCP protocol requests, Slack slash commands, and a built-in chat UI. It connects to Supabase for vector search and uses OpenAI (with optional Cloudflare Workers AI fallback) for embeddings and chat.
 
-1. **Local Development** - Run on your machine for testing
-2. **Cloudflare Workers** - Serverless deployment (recommended)
-3. **Docker** - Self-hosted container deployment
-4. **Traditional Server** - Deploy to VPS or cloud VM
+## Prerequisites
 
-## Cloudflare Workers Deployment (Recommended)
+- **Cloudflare account** -- free tier works ([dash.cloudflare.com](https://dash.cloudflare.com))
+- **Wrangler CLI** -- installed globally or used via `npx`
+- **Supabase project** -- with the schema from `database/schema.sql` applied (see the [README](../README.md) for setup)
+- **OpenAI API key** -- for embeddings and AI chat
+- **Node.js 18+** -- for local development and the Wrangler CLI
 
-### Prerequisites
-- Cloudflare account (free tier works)
-- Wrangler CLI installed: `npm install -g wrangler`
+Authenticate Wrangler before proceeding:
 
-### Step 1: Configure Wrangler
+```bash
+npx wrangler login
+```
 
-Edit `wrangler.toml` with your settings:
+## Step 1: Clone the Repository
+
+```bash
+git clone https://github.com/southleft/company-docs-mcp.git
+cd company-docs-mcp
+npm install
+```
+
+## Step 2: Configure wrangler.toml
+
+Create or edit `wrangler.toml` in the project root:
 
 ```toml
 name = "company-docs-mcp"
 main = "src/index.ts"
 compatibility_date = "2024-01-01"
-node_compat = true
+compatibility_flags = ["nodejs_compat"]
 
+# Cloudflare Workers AI binding (used as fallback when OpenAI is unavailable)
+[ai]
+binding = "AI"
+
+# Non-sensitive configuration only -- never put API keys or credentials here
 [vars]
-ORGANIZATION_NAME = "Your Company"
-SUPABASE_URL = "https://your-project.supabase.co"
-SUPABASE_ANON_KEY = "your-anon-key"
+ORGANIZATION_NAME = "Your Organization"
+ORGANIZATION_DOMAIN = "example.com"
+ORGANIZATION_LOGO_URL = ""
+ORGANIZATION_TAGLINE = "Get instant answers from your documentation."
+VECTOR_SEARCH_ENABLED = "true"
+VECTOR_SEARCH_MODE = "vector"
 
+# KV namespace for caching search results
 [[kv_namespaces]]
 binding = "CONTENT_CACHE"
-id = "your-kv-namespace-id"
+id = "<your-kv-namespace-id>"
 ```
 
-### Step 2: Create KV Namespace
+**Important**: Do not put sensitive values like API keys, Supabase URLs, or service keys in `[vars]`. Those are set as encrypted secrets in Step 4.
+
+## Step 3: Create the KV Namespace
+
+The Worker uses a KV namespace to cache search results for 5 minutes, reducing repeated calls to Supabase and OpenAI.
 
 ```bash
-# Create production namespace
-wrangler kv:namespace create CONTENT_CACHE
-
-# Note the ID returned and add it to wrangler.toml
+npx wrangler kv namespace create CONTENT_CACHE
 ```
 
-### Step 3: Add Secrets
+Wrangler will output something like:
 
-```bash
-# Add sensitive keys as secrets (not in wrangler.toml)
-wrangler secret put SUPABASE_SERVICE_KEY
-wrangler secret put OPENAI_API_KEY
-wrangler secret put SLACK_BOT_TOKEN
-wrangler secret put SLACK_SIGNING_SECRET
+```
+Add the following to your configuration file in your kv_namespaces array:
+{ binding = "CONTENT_CACHE", id = "abc123def456..." }
 ```
 
-### Step 4: Deploy
+Copy the `id` value into the `[[kv_namespaces]]` section of your `wrangler.toml`.
+
+## Step 4: Set Secrets
+
+Secrets are encrypted and only available to your Worker at runtime. They never appear in `wrangler.toml` or in the Cloudflare dashboard in plain text.
+
+**Required secrets:**
 
 ```bash
-# Deploy to production
+echo "sk-your-openai-api-key" | npx wrangler secret put OPENAI_API_KEY
+echo "https://your-project.supabase.co" | npx wrangler secret put SUPABASE_URL
+echo "your-service-role-key" | npx wrangler secret put SUPABASE_SERVICE_KEY
+echo "your-anon-key" | npx wrangler secret put SUPABASE_ANON_KEY
+```
+
+**Optional secrets:**
+
+```bash
+# Only needed if you use Slack integration
+echo "your-slack-signing-secret" | npx wrangler secret put SLACK_SIGNING_SECRET
+
+# Override the default OpenAI model (defaults to gpt-4o)
+echo "gpt-4o-mini" | npx wrangler secret put OPENAI_MODEL
+```
+
+You can also set secrets interactively (Wrangler will prompt for the value):
+
+```bash
+npx wrangler secret put OPENAI_API_KEY
+```
+
+## Step 5: Deploy
+
+```bash
 npm run deploy
-
-# Your MCP will be available at:
-# https://company-docs-mcp.<your-subdomain>.workers.dev
 ```
 
-### Step 5: Verify Deployment
+This runs `wrangler deploy`, which compiles the TypeScript source and publishes the Worker.
+
+On success, Wrangler prints the URL where your Worker is live:
+
+```
+Published company-docs-mcp (X.XXs)
+  https://company-docs-mcp.<your-subdomain>.workers.dev
+```
+
+## Step 6: Verify
+
+Replace `<your-subdomain>` with your actual Cloudflare Workers subdomain in the commands below.
+
+**Health check:**
 
 ```bash
-# Test the MCP endpoint
-curl https://company-docs-mcp.workers.dev/health
+curl https://company-docs-mcp.<your-subdomain>.workers.dev/health
+```
 
-# Test search functionality
-curl -X POST https://company-docs-mcp.workers.dev/search \
+Expected response:
+
+```json
+{
+  "status": "ok",
+  "service": "Your Organization MCP",
+  "version": "2.0.0"
+}
+```
+
+If any required environment variables are missing, the response includes a `warnings` array describing what is not configured.
+
+**Search test:**
+
+```bash
+curl -X POST https://company-docs-mcp.<your-subdomain>.workers.dev/search \
   -H "Content-Type: application/json" \
-  -d '{"query": "authentication"}'
+  -d '{"query": "getting started", "limit": 3}'
 ```
 
-## Docker Deployment
+**MCP endpoint:**
 
-### Step 1: Create Dockerfile
+The MCP protocol endpoint is available at `/mcp`. This is the URL you provide when connecting Claude Desktop or other MCP clients:
 
-```dockerfile
-FROM node:20-slim
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-RUN npm ci --only=production
-
-# Copy application
-COPY . .
-
-# Build TypeScript
-RUN npm run build
-
-EXPOSE 3000
-
-CMD ["node", "dist/index.js"]
+```
+https://company-docs-mcp.<your-subdomain>.workers.dev/mcp
 ```
 
-### Step 2: Build and Run
+**Chat UI:**
+
+Visit the root URL in a browser to access the built-in chat interface:
+
+```
+https://company-docs-mcp.<your-subdomain>.workers.dev/
+```
+
+## Environment Variables Reference
+
+### Non-Sensitive (set in `[vars]` in wrangler.toml)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ORGANIZATION_NAME` | Displayed in the chat UI and health check | `"Organization"` |
+| `ORGANIZATION_DOMAIN` | Your organization's domain | `"example.com"` |
+| `ORGANIZATION_LOGO_URL` | URL to a logo image for the chat UI | (none) |
+| `ORGANIZATION_TAGLINE` | Tagline shown in the chat UI | `"Get instant answers from your documentation."` |
+| `ORGANIZATION_SUBTITLE` | Subtitle shown in the chat UI | `"Powered by MCP (Model Context Protocol)"` |
+| `VECTOR_SEARCH_ENABLED` | Enable vector search via Supabase | `"true"` |
+| `VECTOR_SEARCH_MODE` | Search mode (`"vector"`, `"local"`, or `"hybrid"`) | `"vector"` |
+| `ALLOWED_ORIGINS` | CORS allowed origins (comma-separated or `*`) | `"*"` |
+| `SLACK_SLASH_COMMAND` | Custom Slack slash command name | `"/docs"` |
+| `AI_SYSTEM_PROMPT` | Custom system prompt for AI chat responses | (built-in default) |
+
+### Sensitive (set as secrets via `wrangler secret put`)
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `OPENAI_API_KEY` | OpenAI API key for embeddings and chat | Yes |
+| `OPENAI_MODEL` | OpenAI model to use | No (defaults to `gpt-4o`) |
+| `SUPABASE_URL` | Your Supabase project URL | Yes |
+| `SUPABASE_SERVICE_KEY` | Supabase service role key (full access) | Yes |
+| `SUPABASE_ANON_KEY` | Supabase anon key (respects RLS) | Yes |
+| `SLACK_SIGNING_SECRET` | Slack app signing secret for webhook verification | No |
+
+### Bindings (configured in wrangler.toml)
+
+| Binding | Type | Purpose |
+|---------|------|---------|
+| `CONTENT_CACHE` | KV Namespace | Caches search results (5 min TTL) |
+| `AI` | Workers AI | Cloudflare Workers AI fallback when OpenAI is unavailable |
+
+## Monitoring
+
+### Cloudflare Dashboard
+
+The Cloudflare dashboard provides built-in analytics for your Worker:
+
+- **Requests** -- total requests, success rate, error rate
+- **CPU time** -- execution time per invocation
+- **Errors** -- 4xx/5xx breakdown with timestamps
+
+Navigate to **Workers & Pages** in the Cloudflare dashboard, select your Worker, and open the **Metrics** tab.
+
+### Live Logs with wrangler tail
+
+Stream real-time logs from your deployed Worker to your terminal:
 
 ```bash
-# Build image
-docker build -t company-docs-mcp .
-
-# Run container
-docker run -d \
-  --name docs-mcp \
-  -p 3000:3000 \
-  --env-file .env \
-  company-docs-mcp
+npx wrangler tail
 ```
 
-### Step 3: Docker Compose (Optional)
+This shows every `console.log`, `console.error`, and `console.warn` call from the Worker, along with request metadata (method, URL, status code, duration).
 
-Create `docker-compose.yml`:
-
-```yaml
-version: '3.8'
-
-services:
-  mcp:
-    build: .
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    restart: unless-stopped
-    
-  slack-bot:
-    build: .
-    command: npm run slack:start
-    env_file:
-      - .env
-    depends_on:
-      - mcp
-    restart: unless-stopped
-```
-
-Run with:
-```bash
-docker-compose up -d
-```
-
-## Traditional Server Deployment
-
-### Using PM2
+Filter to errors only:
 
 ```bash
-# Install PM2 globally
-npm install -g pm2
-
-# Build the application
-npm run build
-
-# Start with PM2
-pm2 start ecosystem.config.js
-
-# Save PM2 configuration
-pm2 save
-pm2 startup
+npx wrangler tail --format pretty --status error
 ```
 
-Create `ecosystem.config.js`:
+Filter by search path:
 
-```javascript
-module.exports = {
-  apps: [
-    {
-      name: 'company-docs-mcp',
-      script: 'dist/index.js',
-      instances: 1,
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '1G',
-      env: {
-        NODE_ENV: 'production'
-      }
-    },
-    {
-      name: 'docs-slack-bot',
-      script: 'dist/slack-bot/index.js',
-      instances: 1,
-      autorestart: true,
-      watch: false,
-      max_memory_restart: '512M'
-    }
-  ]
-};
-```
-
-### Using systemd
-
-Create `/etc/systemd/system/company-docs-mcp.service`:
-
-```ini
-[Unit]
-Description=Company Docs MCP Server
-After=network.target
-
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/opt/company-docs-mcp
-ExecStart=/usr/bin/node dist/index.js
-Restart=on-failure
-Environment=NODE_ENV=production
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
 ```bash
-sudo systemctl enable company-docs-mcp
-sudo systemctl start company-docs-mcp
+npx wrangler tail --search "/search"
 ```
 
-## Environment-Specific Configuration
+Press `Ctrl+C` to stop tailing.
 
-### Production Best Practices
+### Health Endpoint
 
-1. **Use environment variables for secrets**
-   ```bash
-   # Never commit .env files
-   # Use platform-specific secret management
-   ```
+The `/health` endpoint serves as a lightweight monitoring target. Point your uptime monitor (Uptime Robot, Better Stack, Cloudflare Health Checks, etc.) at:
 
-2. **Enable CORS appropriately**
-   ```typescript
-   const corsOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['*'];
-   ```
-
-3. **Implement rate limiting**
-   ```typescript
-   const rateLimit = {
-     windowMs: 60 * 1000, // 1 minute
-     max: 100 // limit each IP to 100 requests per minute
-   };
-   ```
-
-4. **Add monitoring**
-   - Use Cloudflare Analytics for Workers
-   - Add custom metrics to your application
-   - Set up alerts for errors
-
-### Security Considerations
-
-1. **API Authentication**
-   ```typescript
-   // Add API key validation
-   if (request.headers.get('X-API-Key') !== process.env.API_KEY) {
-     return new Response('Unauthorized', { status: 401 });
-   }
-   ```
-
-2. **Input Validation**
-   ```typescript
-   // Sanitize user queries
-   const sanitizedQuery = query.replace(/[^\w\s-]/g, '');
-   ```
-
-3. **Secure Headers**
-   ```typescript
-   response.headers.set('X-Content-Type-Options', 'nosniff');
-   response.headers.set('X-Frame-Options', 'DENY');
-   response.headers.set('X-XSS-Protection', '1; mode=block');
-   ```
-
-## Monitoring & Maintenance
-
-### Health Checks
-
-Add a health endpoint:
-
-```typescript
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
-});
+```
+https://company-docs-mcp.<your-subdomain>.workers.dev/health
 ```
 
-### Logging
+A `200` response with `"status": "ok"` indicates the Worker is running. Any `warnings` in the response indicate missing configuration that may affect functionality.
 
-Configure structured logging:
+## Updating
 
-```typescript
-import winston from 'winston';
+To deploy changes after updating the code or configuration:
 
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.json(),
-  transports: [
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'combined.log' })
-  ]
-});
+```bash
+git pull
+npm install
+npm run deploy
 ```
 
-### Backup Strategy
+To update secrets:
 
-1. **Database Backups**
-   - Use Supabase's built-in backup features
-   - Schedule regular exports of your content
+```bash
+echo "new-value" | npx wrangler secret put SECRET_NAME
+```
 
-2. **Configuration Backups**
-   - Version control your configuration files
-   - Document all environment variables
+Secret changes take effect immediately without redeploying the Worker code.
 
 ## Troubleshooting
 
-### Common Issues
+### Worker not responding
 
-**Worker not responding**
-- Check Cloudflare dashboard for errors
-- Verify environment variables are set
-- Check KV namespace bindings
+- Check the Cloudflare dashboard for error logs under **Workers & Pages > your Worker > Logs**
+- Run `npx wrangler tail` to see real-time errors
+- Verify the Worker is deployed: `npx wrangler deployments list`
 
-**Slack bot not connecting**
-- Verify bot tokens are correct
-- Check Socket Mode is enabled
-- Review Slack app permissions
+### Health check shows warnings
 
-**Search returning no results**
-- Ensure content is ingested
-- Verify embeddings are generated
-- Check Supabase connection
+- `SUPABASE_URL/SUPABASE_ANON_KEY not set` -- run the `wrangler secret put` commands from Step 4
+- `OPENAI_API_KEY not set` -- set the secret; without it, AI chat and vector search are unavailable
 
-### Debug Mode
+### Search returning no results
 
-Enable debug logging:
+- Confirm content has been ingested: `npx company-docs publish --dry-run`
+- Verify the Supabase URL and keys are correct
+- Check that `VECTOR_SEARCH_ENABLED` is set to `"true"` in `[vars]`
+- Run `npx wrangler tail` and perform a search to see any runtime errors
 
-```bash
-# Set in .env or environment
-DEBUG_MODE=true
-LOG_LEVEL=debug
-```
+### KV cache issues
 
-## Performance Optimization
+- Verify the KV namespace ID in `wrangler.toml` matches the one created in Step 3
+- List your KV namespaces: `npx wrangler kv namespace list`
+- Cache entries expire after 5 minutes automatically; no manual clearing needed
 
-### Caching Strategy
+### Slack integration not working
 
-1. **KV Cache for Cloudflare**
-   ```typescript
-   const cached = await env.CONTENT_CACHE.get(cacheKey);
-   if (cached) return JSON.parse(cached);
-   ```
+- Verify `SLACK_SIGNING_SECRET` is set as a secret
+- Confirm the Slack app's request URL points to `https://company-docs-mcp.<your-subdomain>.workers.dev/slack`
+- See [SLACK_SETUP.md](SLACK_SETUP.md) for full Slack configuration
 
-2. **In-Memory Cache**
-   ```typescript
-   const cache = new Map();
-   const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-   ```
+### Deployment fails
 
-### Database Optimization
-
-1. **Indexes**
-   ```sql
-   CREATE INDEX idx_content_search ON content_entries 
-   USING gin(search_text);
-   ```
-
-2. **Connection Pooling**
-   ```typescript
-   const pool = new Pool({
-     max: 20,
-     idleTimeoutMillis: 30000,
-     connectionTimeoutMillis: 2000
-   });
-   ```
+- Run `npx wrangler whoami` to confirm you are authenticated
+- Check that `compatibility_flags` includes `"nodejs_compat"` (not the deprecated `node_compat = true`)
+- Ensure the `[ai]` binding is present if you want Workers AI fallback
+- Verify the KV namespace ID is valid
 
 ## Support
 
 For deployment issues:
-1. Check the [troubleshooting guide](#troubleshooting)
-2. Review logs for error messages
-3. Open an issue on GitHub
-4. Contact support (if applicable)
+
+1. Check the troubleshooting section above
+2. Run `npx wrangler tail` to inspect runtime errors
+3. Open an issue at [github.com/southleft/company-docs-mcp](https://github.com/southleft/company-docs-mcp/issues)
