@@ -1,11 +1,11 @@
 # Company Docs MCP
 
-Turn any documentation into an AI-searchable knowledge base. Write your content in markdown, publish it to a database, and let anyone on your team query it through AI tools like Claude, Cursor, or Slack — all powered by the [Model Context Protocol](https://modelcontextprotocol.io).
+Turn any documentation into an AI-searchable knowledge base. Feed it markdown, HTML, PDFs, web pages, or plain text — publish to a database and let anyone on your team query it through AI tools like Claude, Cursor, or Slack. Powered by the [Model Context Protocol](https://modelcontextprotocol.io).
 
 ## What This Does
 
-1. **Write** — Create documentation as markdown files (design systems, HR policies, engineering guides, product specs — anything).
-2. **Publish** — Run a command that reads your markdown, converts it into searchable vectors, and stores it in a database.
+1. **Ingest** — Point the CLI at your content. It accepts markdown files, HTML pages, PDFs, live URLs, or even an entire website via crawl.
+2. **Publish** — Run a command that converts your content into searchable vectors and stores it in a database.
 3. **Query** — Connect any MCP-compatible AI tool to your server. Ask questions in plain English and get answers sourced directly from your documentation.
 
 ## Two Ways to Use This
@@ -34,7 +34,7 @@ The system uses three services. All three offer free tiers that are sufficient f
 
 ```mermaid
 flowchart TD
-    A["Your Markdown Files"]
+    A["Your Content<br/>Markdown, HTML, PDFs, URLs"]
     B["Cloudflare Workers AI"]
     C[("Supabase")]
     D["Your Team<br/>Claude, Cursor, Slack, Chat UI"]
@@ -59,7 +59,7 @@ flowchart TD
 |---------|-------------|-----------------|
 | **Cloudflare** | Hosts your server and converts text into searchable vectors using its built-in AI | This is where your server runs 24/7 so your team can query docs at any time. It also handles the AI processing that makes semantic search possible — no separate AI subscription needed. |
 | **Supabase** | Stores your documentation in a PostgreSQL database with vector search | Powers "smart" search — asking "how do I deploy?" will find documents about releases, CI/CD, and shipping, not just pages containing the word "deploy." |
-| **npm package** | A command-line tool that reads your markdown and publishes it to the database | You run this on your computer whenever you add or update documentation. |
+| **npm package** | A command-line tool that ingests your content (markdown, HTML, PDFs, URLs) and publishes it to the database | You run this on your computer whenever you add or update documentation. |
 
 **No third-party AI API keys are required.** Cloudflare provides the AI capabilities through its Workers AI service, which is included with every Cloudflare account at no extra cost.
 
@@ -141,9 +141,22 @@ Replace the placeholder values with the ones you copied from Supabase (Step 2) a
 
 > **Keep this file private.** Never commit `.env` to version control — it contains credentials. Add `.env` to your `.gitignore` file.
 
-### Step 5: Write Your Documentation
+### Step 5: Prepare Your Content
 
-Create markdown files in a directory. Any folder structure works:
+The system accepts multiple content formats. Use whichever fits your workflow:
+
+| Format | How to ingest | Best for |
+|--------|--------------|----------|
+| **Markdown** (.md) | `npx company-docs ingest markdown --dir=./docs` | Documentation you write and maintain as files |
+| **HTML** (.html) | `npm run ingest -- html ./file.html` | Exported web pages, saved articles |
+| **PDF** (.pdf) | `npm run ingest -- pdf ./document.pdf` | Policies, reports, specs in PDF format |
+| **URL** (any web page) | `npm run ingest -- url https://example.com/page` | Live web content you want to index |
+| **Website crawl** | `npm run ingest:web -- --url=https://docs.example.com` | Entire documentation sites |
+| **CSV of URLs** | `npm run ingest:csv -- urls.csv` | Batch-importing many web pages at once |
+
+> **Note:** The `npx company-docs` CLI (from the npm package) directly supports markdown ingestion and publishing. The other formats (HTML, PDF, URL, website crawl, CSV) are available when running from the [cloned repository](https://github.com/southleft/company-docs-mcp).
+
+**Markdown is the most common starting point.** Create files in a directory — any folder structure works:
 
 ```
 docs/
@@ -153,12 +166,9 @@ docs/
 ├── engineering/
 │   ├── deployment-guide.md
 │   └── code-review-process.md
-├── policies/
-│   ├── pto-policy.md
-│   └── expense-guidelines.md
-└── product/
-    ├── feature-specs.md
-    └── release-process.md
+└── policies/
+    ├── pto-policy.md
+    └── expense-guidelines.md
 ```
 
 You can optionally add YAML frontmatter to control how each document is categorized:
@@ -178,20 +188,30 @@ Your content here...
 
 If you don't include frontmatter, the system will auto-detect a category and extract tags from the content.
 
-### Step 6: Publish Your Documentation
+### Step 6: Ingest and Publish
 
-Two commands turn your markdown files into a searchable knowledge base:
+Two steps turn your content into a searchable knowledge base:
+
+**Step 1 — Ingest** (converts your content into structured entries):
 
 ```bash
-# Step 1: Parse markdown files into structured entries
+# Markdown (most common)
 npx company-docs ingest markdown --dir=./docs
 
-# Step 2: Push entries to the database with AI-generated vectors
+# Or from the cloned repo, for other formats:
+npm run ingest -- html ./exported-page.html
+npm run ingest -- pdf ./policy-document.pdf
+npm run ingest -- url https://wiki.example.com/important-page
+```
+
+**Step 2 — Publish** (pushes entries to the database with search vectors):
+
+```bash
 npx company-docs publish
 ```
 
 **What happens:**
-1. `ingest markdown` reads your files, extracts titles and sections, and saves structured entries to a `content/entries/` folder in your project.
+1. The ingest step reads your content, extracts titles and sections, and saves structured entries as JSON files in a `content/entries/` folder in your project.
 2. `publish` sends each entry to Cloudflare's AI to generate search vectors, then stores everything in your Supabase database. A content hash automatically skips entries that haven't changed, so re-running is fast.
 
 To preview what would be published without actually writing to the database:
@@ -200,7 +220,7 @@ To preview what would be published without actually writing to the database:
 npx company-docs publish --dry-run
 ```
 
-**Updating documentation:** Whenever you edit your markdown files, run both commands again. Only changed entries are re-processed.
+**Updating content:** Whenever you change your source files, run both steps again. Only changed entries are re-processed.
 
 ### Step 7: Deploy the Server (Cloudflare Worker)
 
@@ -287,7 +307,7 @@ Once connected, your AI tool will have access to these search tools:
 |------|-------------|
 | `search_documentation` | Finds documentation that matches your question using semantic search |
 | `search_chunks` | Searches specific sections within documents |
-| `browse_by_category` | Lists all documentation in a category (categories come from your markdown frontmatter or the `--category` flag) |
+| `browse_by_category` | Lists all documentation in a category (categories come from frontmatter, the `--category` flag, or auto-detection) |
 | `get_all_tags` | Lists every tag used across your documentation |
 
 ## Cloudflare's Role — A Quick Summary
@@ -303,11 +323,13 @@ Since Cloudflare appears in several steps, here's a plain-language summary of wh
 
 ## CLI Reference
 
+### npm Package Commands
+
+These work anywhere via `npx company-docs`:
+
 ```
 company-docs <command> [options]
 ```
-
-### Commands
 
 | Command | Description |
 |---------|-------------|
@@ -315,6 +337,18 @@ company-docs <command> [options]
 | `publish` | Push entries to the database with AI-generated vectors |
 | `ingest supabase` | Same as `publish` |
 | `manifest` | Generate `content/manifest.json` (used during Worker deployment) |
+
+### Repository Commands
+
+These are available when running from the [cloned repository](https://github.com/southleft/company-docs-mcp):
+
+| Command | Description |
+|---------|-------------|
+| `npm run ingest -- html <file>` | Ingest an HTML file |
+| `npm run ingest -- pdf <file>` | Ingest a PDF document |
+| `npm run ingest -- url <url>` | Ingest a single web page |
+| `npm run ingest:csv -- <file>` | Ingest URLs listed in a CSV file |
+| `npm run ingest:web -- --url=<url>` | Crawl and ingest an entire website |
 
 ### Ingest Markdown Options
 
@@ -336,10 +370,18 @@ company-docs <command> [options]
 ### Examples
 
 ```bash
-# Ingest docs from different folders with different categories
+# Ingest markdown from different folders with different categories
 npx company-docs ingest markdown --dir=./docs/engineering --category=engineering
 npx company-docs ingest markdown --dir=./docs/policies --category=hr
 npx company-docs publish
+
+# Ingest a PDF and a web page (from cloned repo)
+npm run ingest -- pdf ./policies/employee-handbook.pdf
+npm run ingest -- url https://wiki.example.com/onboarding
+npx company-docs publish
+
+# Crawl an entire documentation site (from cloned repo)
+npm run ingest:web -- --url=https://docs.example.com --max-pages=50
 
 # Full re-publish from scratch
 npx company-docs publish --clear
@@ -385,12 +427,12 @@ All fields are optional. If no frontmatter is present, the system auto-detects a
 
 The system is designed for repeated runs — you don't need to start from scratch each time:
 
-- **Content hashing** — Only entries that have actually changed are re-processed
-- **Deterministic IDs** — The same file always produces the same database ID, preventing duplicates
-- **Stale cleanup** — Entries removed from your docs folder are automatically cleaned up from the database
+- **Content hashing** — Only entries whose content has actually changed are re-processed
+- **Deterministic IDs** — The same source file or URL always produces the same database ID, preventing duplicates
+- **Stale cleanup** — Entries removed from your source files are automatically cleaned up from the database
 
 ```bash
-# Edit your markdown, then re-publish — only changes are processed
+# Edit your content, then re-ingest and re-publish — only changes are processed
 npx company-docs ingest markdown --dir=./docs
 npx company-docs publish
 ```
@@ -462,24 +504,6 @@ EMBEDDING_PROVIDER=openai
 
 **Wrangler login not working**
 - If you have a `CLOUDFLARE_API_TOKEN` set in your environment or `.env` file, it can interfere with the login flow. Remove or comment it out, then try `npx wrangler login` again.
-
-## Additional Ingestion Sources
-
-When running from the cloned repository (not the npm package), additional ingestion methods are available:
-
-```bash
-# Crawl a website
-npm run ingest:web -- --url=https://docs.example.com
-
-# Import from CSV with URLs
-npm run ingest:csv -- urls.csv
-
-# Import a single URL
-npm run ingest:url https://example.com/page
-
-# Import PDFs
-npm run ingest:pdf ./document.pdf
-```
 
 ## Security
 
