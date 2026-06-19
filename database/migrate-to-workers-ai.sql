@@ -99,11 +99,11 @@ BEGIN
     v.tags,
     v.confidence,
     v.similarity,
-    CASE
-      WHEN query_text IS NOT NULL AND t.text_rank IS NOT NULL THEN
-        (v.similarity * 0.7 + t.text_rank * 0.3)
-      ELSE v.similarity
-    END AS rank
+    -- Base score = vector similarity; a text match adds a small positive BOOST.
+    -- (The previous formula multiplied a text-matching doc's similarity by 0.7
+    -- while non-matching docs kept full similarity, so the exact doc you searched
+    -- for ranked below its lookalike siblings — see migration 003.)
+    (v.similarity + 0.15 * COALESCE(t.text_rank, 0)) AS rank
   FROM vector_results v
   LEFT JOIN text_results t ON v.id = t.id
   WHERE v.similarity >= match_threshold
