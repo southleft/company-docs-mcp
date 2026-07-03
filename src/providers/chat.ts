@@ -20,6 +20,11 @@ export interface ChatMessage {
 	toolCallId?: string;
 	/** Optional tool/function name for `tool` messages. */
 	name?: string;
+	/**
+	 * Set on `assistant` messages that requested tool calls — required when
+	 * feeding a prior ChatResult's tool calls back in for the follow-up turn.
+	 */
+	toolCalls?: ChatToolCall[];
 }
 
 export interface ChatToolDef {
@@ -39,6 +44,8 @@ export interface ChatToolCall {
 export interface ChatParams {
 	messages: ChatMessage[];
 	tools?: ChatToolDef[];
+	/** Vendor-neutral tool_choice: force, allow, or forbid tool use. */
+	toolChoice?: "auto" | "required" | "none";
 	temperature?: number;
 	maxTokens?: number;
 }

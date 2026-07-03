@@ -19,6 +19,11 @@ VECTOR_SEARCH_MODE = "vector"
 # Embedding provider: "workers-ai" (default) or "openai"
 # Workers AI uses the built-in AI binding below — no API key needed
 # EMBEDDING_PROVIDER = "workers-ai"
+# Provider plugin selectors (see src/providers/README.md). Defaults preserve
+# the standard stack; set these only when running a custom backend.
+# VECTOR_STORE = "supabase"
+# CHAT_PROVIDER = "openai"
+# CACHE = "kv"
 
 [[kv_namespaces]]
 binding = "CONTENT_CACHE"

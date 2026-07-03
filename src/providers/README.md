@@ -4,10 +4,13 @@ Swappable backends for the four infrastructure seams, so a team can run this on
 their own stack instead of being locked to Cloudflare Workers + Workers AI +
 Supabase.
 
-> **Status: Wave 1 — interfaces only.** The contracts and the registry/container
-> exist and are unit-tested, but nothing in the runtime imports them yet and no
-> concrete providers are registered. Wave 2 moves the existing Supabase /
-> Workers AI / OpenAI code behind these interfaces with no behavior change.
+> **Status: Wave 2 — live.** The built-in backends (Supabase, Workers AI,
+> OpenAI, KV/memory caches) are implemented in [`impl/`](./impl) and registered
+> by default when this barrel is imported. The runtime search path
+> (`lib/search-handler.ts`), the AI chat handler, and the `/search` response
+> cache all resolve their backends through `resolveContainer(env)`. Wave 3
+> adds an Anthropic ChatProvider; Wave 4 the re-embed/migration runbook for
+> switching embedding providers.
 
 ## The four seams
 
@@ -23,7 +26,7 @@ Supabase.
 ```ts
 import { resolveContainer } from "./providers";
 
-const services = resolveContainer(env);        // auto-detect from env
+const services = resolveContainer(env);        // auto-detect from env (lazy per seam)
 const hits = await services.vectorStore.search({ queryText, limit: 5 });
 const answer = await services.chat.chat({ messages });
 ```

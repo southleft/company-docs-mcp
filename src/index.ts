@@ -11,6 +11,7 @@
  */
 
 import { z } from "zod";
+import { resolveContainer } from "./providers";
 import { handleMcp } from "./mcp-handler";
 import { handleAiChat } from "./ai-chat-handler";
 import { handleSlackCommand } from "./slack-webhook";
@@ -79,25 +80,9 @@ function cacheKey(query: string, limit: number): string {
   return `search:${query.toLowerCase().trim()}:${limit}`;
 }
 
-async function getCached(env: Env, key: string): Promise<unknown | null> {
-  if (!env.CONTENT_CACHE) return null;
-  try {
-    const raw = await env.CONTENT_CACHE.get(key, "text");
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-async function setCache(env: Env, key: string, value: unknown): Promise<void> {
-  if (!env.CONTENT_CACHE) return;
-  try {
-    await env.CONTENT_CACHE.put(key, JSON.stringify(value), {
-      expirationTtl: CACHE_TTL_SECONDS,
-    });
-  } catch {
-    // KV write failures are non-fatal
-  }
+/** Response cache via the provider container (KV when bound, memory otherwise). */
+function responseCache(env: Env) {
+  return resolveContainer(env as any).cache;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,9 +181,10 @@ async function handleSearch(request: Request, env: Env): Promise<Response> {
   const { query, limit } = parsed.data;
 
   try {
-    // Check KV cache first
+    // Check the response cache first
+    const cache = responseCache(env);
     const key = cacheKey(query, limit);
-    const cached = await getCached(env, key);
+    const cached = await cache.get(key);
     if (cached) {
       return new Response(JSON.stringify(cached), { headers });
     }
@@ -256,8 +242,7 @@ async function handleSearch(request: Request, env: Env): Promise<Response> {
 
     const responseBody = { results: mapped, total: mapped.length, query };
 
-    // Write to KV cache in the background
-    await setCache(env, key, responseBody);
+    await cache.put(key, responseBody, { ttlSeconds: CACHE_TTL_SECONDS });
 
     return new Response(JSON.stringify(responseBody), { headers });
   } catch (e: any) {

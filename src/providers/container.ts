@@ -59,10 +59,29 @@ export function resolveContainer(
 	const cacheId =
 		selection.cache ?? config.CACHE ?? (config.CONTENT_CACHE ? "kv" : "memory");
 
+	// Seams resolve lazily, on first access, and are then memoized. This
+	// matters for partial configurations: a deployment using Workers AI
+	// embeddings with no OPENAI_API_KEY must still be able to search — an
+	// eagerly-constructed chat provider would throw and take the whole
+	// container down with it. Callers only pay for (and only need valid
+	// config for) the seams they actually touch.
+	let embedder: EmbeddingProvider | undefined;
+	let vectorStore: VectorStore | undefined;
+	let chat: ChatProvider | undefined;
+	let cache: Cache | undefined;
+
 	return {
-		embedder: embeddingRegistry.resolve(embeddingId, config),
-		vectorStore: vectorStoreRegistry.resolve(vectorStoreId, config),
-		chat: chatRegistry.resolve(chatId, config),
-		cache: cacheRegistry.resolve(cacheId, config),
+		get embedder() {
+			return (embedder ??= embeddingRegistry.resolve(embeddingId, config));
+		},
+		get vectorStore() {
+			return (vectorStore ??= vectorStoreRegistry.resolve(vectorStoreId, config));
+		},
+		get chat() {
+			return (chat ??= chatRegistry.resolve(chatId, config));
+		},
+		get cache() {
+			return (cache ??= cacheRegistry.resolve(cacheId, config));
+		},
 	};
 }

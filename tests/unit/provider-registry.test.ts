@@ -119,10 +119,25 @@ describe("resolveContainer", () => {
 		expect(container.embedder.id).toBe("fake-embed");
 	});
 
-	it("throws when a default-selected provider is not registered", () => {
-		// Default vectorStore id is "supabase", which is not registered in Wave 1.
-		expect(() => resolveContainer({}, { embedding: "fake-embed" })).toThrow(
-			ProviderError,
-		);
+	it("resolves seams lazily: unregistered seams only throw on access", () => {
+		// This test file imports the container module directly (not the barrel),
+		// so no default providers are registered here. Building the container
+		// must succeed regardless — a seam without valid config/registration
+		// only fails when something actually touches it.
+		const container = resolveContainer({}, { embedding: "fake-embed" });
+		expect(container.embedder.id).toBe("fake-embed");
+		expect(() => container.vectorStore).toThrow(ProviderError);
+	});
+
+	it("memoizes resolved providers", () => {
+		let constructions = 0;
+		embeddingRegistry.register("counting-embed", () => {
+			constructions++;
+			return embedder;
+		});
+		const container = resolveContainer({}, { embedding: "counting-embed" });
+		void container.embedder;
+		void container.embedder;
+		expect(constructions).toBe(1);
 	});
 });
