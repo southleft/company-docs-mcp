@@ -75,35 +75,18 @@ async function processMessage(server: McpServer, message: any, env: Env, request
     return { jsonrpc: "2.0", id: message.id, result: {} };
   }
 
-  // tools/list — delegate to the SDK server's internal registry
+  // tools/list — surface the SDK server's registered tools via JSON-RPC
   if (method === "tools/list") {
-    // Access the internal server to get registered tools
-    const lowLevelServer = (server as any).server;
-    if (lowLevelServer && typeof lowLevelServer.getRegisteredTools === "function") {
-      const tools = lowLevelServer.getRegisteredTools();
-      return { jsonrpc: "2.0", id: message.id, result: { tools } };
-    }
-
-    // Fallback: manually invoke the list handler through the protocol
-    // The SDK registers tools internally — we need to surface them via JSON-RPC
     const registeredTools = getRegisteredToolSchemas(server);
     return { jsonrpc: "2.0", id: message.id, result: { tools: registeredTools } };
   }
 
-  // tools/call — execute through the SDK's registered handlers
+  // tools/call — validate against the tool's schema, then execute
   if (method === "tools/call") {
     const toolName = message.params?.name;
     const args = message.params?.arguments || {};
 
     try {
-      // Use the SDK's internal tool execution
-      const lowLevelServer = (server as any).server;
-      if (lowLevelServer && typeof lowLevelServer.callTool === "function") {
-        const result = await lowLevelServer.callTool(toolName, args);
-        return { jsonrpc: "2.0", id: message.id, result };
-      }
-
-      // Fallback: call tool handler directly from the registered tools map
       const result = await callRegisteredTool(server, toolName, args);
       return { jsonrpc: "2.0", id: message.id, result };
     } catch (error: any) {
@@ -111,7 +94,10 @@ async function processMessage(server: McpServer, message: any, env: Env, request
       return {
         jsonrpc: "2.0",
         id: message.id,
-        error: { code: -32603, message: error.message || "Tool execution failed" },
+        error: {
+          code: error.jsonRpcCode === -32602 ? -32602 : -32603,
+          message: error.message || "Tool execution failed",
+        },
       };
     }
   }
@@ -170,11 +156,28 @@ async function callRegisteredTool(server: McpServer, toolName: string, args: any
     throw new Error(`Unknown tool: ${toolName}`);
   }
 
+  // Enforce the tool's zod input schema. Without this, dispatching straight to
+  // the callback silently skips ALL declared constraints (types, .max() caps),
+  // letting e.g. limit=999999999 flow unclamped into the database query.
+  let validatedArgs = args;
+  if (tool.inputSchema && typeof tool.inputSchema.safeParseAsync === "function") {
+    const parsed = await tool.inputSchema.safeParseAsync(args);
+    if (!parsed.success) {
+      const detail = parsed.error.issues
+        .map((issue: any) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+        .join("; ");
+      const err: any = new Error(`Invalid params: ${detail}`);
+      err.jsonRpcCode = -32602;
+      throw err;
+    }
+    validatedArgs = parsed.data;
+  }
+
   if (typeof tool.handler === "function") {
-    return tool.handler(args, {});
+    return tool.handler(validatedArgs, {});
   }
   if (typeof tool.callback === "function") {
-    return tool.callback(args, {});
+    return tool.callback(validatedArgs, {});
   }
 
   throw new Error(`Tool "${toolName}" has no callable handler`);

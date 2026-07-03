@@ -10,22 +10,21 @@ import { Category } from './lib/content';
 import { withTimeout } from './lib/utils';
 
 // ---------------------------------------------------------------------------
-// Content cleaning — strip markdown artifacts for clean plain text
+// Content preparation — preserve structure for AI and Slack formatting
 // ---------------------------------------------------------------------------
 
-/** Strip all markdown formatting to produce clean readable text */
-function cleanContent(content: string): string {
+/** Lightweight content prep for AI — preserves URLs and structure */
+function prepareForAI(content: string): string {
   let text = content;
   // Strip YAML frontmatter
   text = text.replace(/^---[\s\S]*?---\n*/m, '');
-  // Convert markdown tables to readable key-value lists
+  // Convert markdown tables to readable format
   text = convertTables(text);
-  // Strip markdown headings but keep the text
-  text = text.replace(/^#{1,6}\s+(.+)$/gm, '$1');
-  // Convert markdown links [text](url) → text
-  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
-  // Strip image syntax ![alt](url)
+  // Strip image syntax ![alt](url) → alt text
   text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
+  // Keep markdown links [text](url) intact — AI passes them through, toSlackMrkdwn() converts later
+  // Convert headings to labeled sections
+  text = text.replace(/^#{1,6}\s+(.+)$/gm, '$1:');
   // Strip bold/italic markers
   text = text.replace(/\*\*(.+?)\*\*/g, '$1');
   text = text.replace(/(?<!\w)\*(.+?)\*(?!\w)/g, '$1');
@@ -34,11 +33,33 @@ function cleanContent(content: string): string {
   text = text.replace(/^>\s?/gm, '');
   // Strip horizontal rules
   text = text.replace(/^[-*_]{3,}\s*$/gm, '');
-  // Convert markdown dashes to bullets
-  text = text.replace(/^- /gm, '• ');
+  // Keep list items as dashes
   // Collapse excessive newlines
   text = text.replace(/\n{3,}/g, '\n\n');
   return text.trim();
+}
+
+/** Extract resource links (Figma, Storybook, etc.) from raw markdown and format as Slack links */
+function extractResourceLinks(content: string): string {
+  const links: string[] = [];
+  // Match markdown links [text](url) with http(s) URLs
+  const linkRe = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+  let match: RegExpExecArray | null;
+  const seen = new Set<string>();
+
+  while ((match = linkRe.exec(content)) !== null) {
+    const label = match[1].trim();
+    const url = match[2].trim();
+    // Only pick resource-style links (short labels, not full sentences)
+    if (label.length <= 40 && !seen.has(label)) {
+      seen.add(label);
+      links.push(`<${url}|${label}>`);
+    }
+    // Stop after first few — these are typically the header resource links
+    if (links.length >= 5) break;
+  }
+
+  return links.length > 0 ? links.join(' | ') + '\n\n' : '';
 }
 
 /** Convert markdown tables to readable bullet lists */
@@ -95,14 +116,26 @@ function transformInline(str: string): string {
   str = str.replace(/^#{1,6}\s+(.+)$/gm, '*$1*');
   // Bold **text** → *text*
   str = str.replace(/\*\*(.+?)\*\*/g, '*$1*');
-  // Markdown links [text](url) → <url|text>
+  // Markdown links [text](url) → <url|text> for http(s) URLs
   str = str.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<$2|$1>');
+  // Strip remaining markdown links (non-http, e.g. relative paths) → just text
+  str = str.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
   // Strip image syntax ![alt](url)
   str = str.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
-  // Convert remaining markdown dashes to bullet points
+  // Convert __text__ → _text_ (Slack italic)
+  str = str.replace(/__(.+?)__/g, '_$1_');
+  // Normalize all bullet/list markers to • (Slack has no native list syntax)
   str = str.replace(/^- /gm, '• ');
-  // Strip any remaining markdown table syntax (separator rows, pipe chars in data)
+  str = str.replace(/^\* /gm, '• ');
+  // Strip markdown table separator rows
   str = str.replace(/^\|[-| :]+\|\s*$/gm, '');
+  // Convert remaining table data rows to readable bullet format
+  str = str.replace(/^\|(.+)\|\s*$/gm, (_match: string, inner: string) => {
+    const cells = inner.split('|').map(c => c.trim()).filter(c => c.length > 0);
+    if (cells.length === 0) return '';
+    if (cells.length === 1) return '• ' + cells[0];
+    return '• *' + cells[0] + '* — ' + cells.slice(1).join(', ');
+  });
   return str;
 }
 
@@ -136,6 +169,54 @@ interface SlackBlock {
 }
 
 // ---------------------------------------------------------------------------
+// Slack request signature verification
+// https://api.slack.com/authentication/verifying-requests-from-slack
+// ---------------------------------------------------------------------------
+
+const SLACK_REPLAY_WINDOW_SECONDS = 60 * 5;
+
+async function verifySlackSignature(
+  signingSecret: string,
+  signature: string,
+  timestamp: string,
+  rawBody: string
+): Promise<boolean> {
+  // Reject stale timestamps to prevent replay attacks
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > SLACK_REPLAY_WINDOW_SECONDS) {
+    return false;
+  }
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(signingSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const mac = await crypto.subtle.sign('HMAC', key, encoder.encode(`v0:${timestamp}:${rawBody}`));
+  const expected = `v0=${[...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+
+  // Constant-time comparison
+  if (expected.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) {
+    diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+/** Only ever POST responses back to Slack's own webhook host. */
+function isSlackResponseUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname === 'hooks.slack.com';
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Slash command entry point
 // ---------------------------------------------------------------------------
 
@@ -147,7 +228,27 @@ export async function handleSlackCommand(request: Request, env: any, ctx?: any):
     return new Response('Unauthorized', { status: 401 });
   }
 
-  const formData = await request.formData();
+  // Fail closed: without the signing secret we cannot authenticate Slack,
+  // and this endpoint searches private docs and spends AI budget.
+  if (!env.SLACK_SIGNING_SECRET) {
+    console.error('[Slack] SLACK_SIGNING_SECRET is not configured; rejecting request');
+    return new Response('Slack integration not configured', { status: 401 });
+  }
+
+  // Read the raw body for HMAC verification, then parse it as form data
+  const rawBody = await request.text();
+  const validSignature = await verifySlackSignature(
+    env.SLACK_SIGNING_SECRET,
+    signature,
+    timestamp,
+    rawBody
+  );
+  if (!validSignature) {
+    console.error('[Slack] Request signature verification failed');
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  const formData = new URLSearchParams(rawBody);
   const command: SlackSlashCommand = {
     token: formData.get('token') as string,
     team_id: formData.get('team_id') as string,
@@ -210,20 +311,25 @@ const AI_SYSTEM_PROMPT = `You are a documentation assistant answering a question
 IMPORTANT: Do NOT invent information. Only use facts from the provided documentation.
 
 FORMAT RULES:
-• Open with a 1-2 sentence summary directly answering the question
-• Use *bold text* for section headers (single asterisks, never ## or #)
-• Use • bullet points for lists (never dashes -)
-• Include code examples in triple-backtick blocks if the docs have them
-• Convert any tables into bullet-point lists
-• Be thorough — cover properties, variants, usage guidelines, code examples
-• Do NOT add a Sources section — the system adds that automatically
-• Keep response under 4000 characters`;
+- Open with a 1-2 sentence summary directly answering the question
+- Use *bold text* for section headers (single asterisks wrapping text, never ## or #)
+- Preserve markdown links [text](url) exactly as they appear — the system will format them for Slack
+- Use • (bullet character) for list items, never - or * symbols
+- Convert markdown tables into • bullet lists (e.g. "• *Danger* — #FFF1F2, CircleAlert, Errors"). NEVER output raw | pipe table syntax
+- Include code examples in triple-backtick blocks if the docs have them
+- Be thorough — cover properties, variants, usage guidelines, code examples
+- Do NOT include resource link bars (Open in Figma, View Source, Storybook) — the system adds those
+- Do NOT add a Sources section — the system adds that automatically
+- Keep response under 4000 characters`;
 
 // ---------------------------------------------------------------------------
 // Core: search → synthesize → respond
 // ---------------------------------------------------------------------------
 
 async function searchAndRespond(command: SlackSlashCommand, env: any) {
+  console.log(`[Slack] searchAndRespond START: query="${command.text}" response_url="${command.response_url?.slice(0, 80)}..."`);
+  console.log(`[Slack] env check: AI=${!!env?.AI} EMBEDDING_PROVIDER=${env?.EMBEDDING_PROVIDER} SUPABASE_URL=${!!env?.SUPABASE_URL} OPENAI_API_KEY=${!!env?.OPENAI_API_KEY}`);
+
   let usedResults: Array<{ title: string; content: string }> = [];
 
   try {
@@ -231,13 +337,16 @@ async function searchAndRespond(command: SlackSlashCommand, env: any) {
     const model = env?.OPENAI_MODEL || 'gpt-4o';
 
     // --- Step 1: Search documentation ---
+    console.log('[Slack] Step 1: Starting search...');
     const searchResults = await withTimeout(
       searchWithSupabase({ query: command.text, limit: 5 }, env),
       10000,
       'Slack search'
     );
+    console.log(`[Slack] Step 1 complete: ${searchResults.length} results`);
 
     if (searchResults.length === 0) {
+      console.log('[Slack] No results — sending empty response');
       await sendSlackResponse(command.response_url, env, {
         text: `No documentation found matching "${command.text}". Try different keywords.`,
         sources: [],
@@ -250,7 +359,7 @@ async function searchAndRespond(command: SlackSlashCommand, env: any) {
 
     // Prepare clean content for AI (used by both OpenAI and Workers AI)
     const cleanResults = topResults.map((entry, i) => {
-      return `[${i + 1}] ${entry.title}\n${cleanContent(entry.content).slice(0, 2500)}`;
+      return `[${i + 1}] ${entry.title}\n${prepareForAI(entry.content).slice(0, 2500)}`;
     }).join('\n\n---\n\n');
 
     const userMessage = `Question: "${command.text}"\n\nDocumentation:\n\n${cleanResults}`;
@@ -259,38 +368,66 @@ async function searchAndRespond(command: SlackSlashCommand, env: any) {
     let responseText = '';
 
     if (apiKey) {
+      console.log('[Slack] Step 2: Trying OpenAI...');
       responseText = await tryOpenAI(apiKey, model, userMessage);
+    } else {
+      console.log('[Slack] Step 2: No OpenAI key, skipping');
     }
 
     // --- Step 3: Try Cloudflare Workers AI as fallback ---
     if (!responseText && env.AI) {
+      console.log('[Slack] Step 3: Trying Workers AI...');
       responseText = await tryWorkersAI(env.AI, userMessage);
     }
 
     // --- Step 4: Final fallback — well-formatted raw content ---
     if (!responseText) {
+      console.log('[Slack] Step 4: Using formatted fallback');
       responseText = buildFallbackResponse(command.text, topResults);
     }
 
-    // --- Step 5: Convert to Slack mrkdwn and send ---
+    // --- Step 5: Convert to Slack mrkdwn, prepend resource links, and send ---
+    console.log(`[Slack] Step 5: Sending response (${responseText.length} chars) to response_url`);
     responseText = toSlackMrkdwn(responseText);
+
+    // Strip AI's resource link bars (e.g. "Open in Figma | View Source | Storybook")
+    // — these are unreliable (non-http links become plain text). extractResourceLinks handles it.
+    responseText = responseText.replace(/^.*(?:Figma|View Source|Storybook).*\|.*(?:Figma|View Source|Storybook).*$/gm, '');
+    responseText = responseText.replace(/\n{3,}/g, '\n\n').trim();
+
+    // Prepend resource links extracted from raw source (only clickable http links)
+    const resourceLinks = extractResourceLinks(topResults[0].content);
+    if (resourceLinks) {
+      responseText = resourceLinks + responseText;
+    }
 
     await sendSlackResponse(command.response_url, env, {
       text: responseText,
       sources: usedResults,
     });
+    console.log('[Slack] searchAndRespond COMPLETE');
 
   } catch (error: any) {
     console.error('[Slack] Fatal error:', error?.message || error);
+    console.error('[Slack] Fatal error stack:', error?.stack?.slice(0, 500));
 
-    await fetch(command.response_url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        response_type: 'ephemeral',
-        text: 'An error occurred while searching the documentation. Please try again.',
-      })
-    });
+    try {
+      if (!isSlackResponseUrl(command.response_url)) {
+        console.error('[Slack] Refusing to POST error to non-Slack response_url');
+        return;
+      }
+      const errRes = await fetch(command.response_url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          response_type: 'ephemeral',
+          text: 'An error occurred while searching the documentation. Please try again.',
+        })
+      });
+      console.error(`[Slack] Error handler response_url: HTTP ${errRes.status}`);
+    } catch (fetchErr: any) {
+      console.error(`[Slack] Error handler fetch also failed: ${fetchErr.message}`);
+    }
   }
 }
 
@@ -306,7 +443,7 @@ async function tryOpenAI(apiKey: string, model: string, userMessage: string): Pr
         { role: 'system', content: AI_SYSTEM_PROMPT },
         { role: 'user', content: userMessage }
       ],
-      max_tokens: 2500,
+      max_completion_tokens: 2500,
       temperature: 0.3,
     });
 
@@ -349,15 +486,19 @@ async function tryOpenAI(apiKey: string, model: string, userMessage: string): Pr
 
 async function tryWorkersAI(ai: any, userMessage: string): Promise<string> {
   try {
-    const result = await ai.run('@cf/meta/llama-3.1-8b-instruct', {
-      messages: [
-        { role: 'system', content: AI_SYSTEM_PROMPT },
-        { role: 'user', content: userMessage }
-      ],
-      max_tokens: 2500,
-    });
+    const result = await withTimeout(
+      ai.run('@cf/meta/llama-3.1-8b-instruct', {
+        messages: [
+          { role: 'system', content: AI_SYSTEM_PROMPT },
+          { role: 'user', content: userMessage }
+        ],
+        max_tokens: 2500,
+      }),
+      15000,
+      'Workers AI synthesis'
+    );
 
-    const text = result?.response || '';
+    const text = (result as { response?: string } | undefined)?.response || '';
     if (text) {
       console.log(`[Slack] Workers AI success: ${text.length} chars`);
       return text;
@@ -372,6 +513,14 @@ async function tryWorkersAI(ai: any, userMessage: string): Promise<string> {
 // Tier 3: Formatted fallback when all AI is unavailable
 // ---------------------------------------------------------------------------
 
+/** Strip frontmatter and images, then convert to Slack mrkdwn */
+function prepareForFallback(content: string): string {
+  let text = content;
+  text = text.replace(/^---[\s\S]*?---\n*/m, '');
+  text = text.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
+  return text;
+}
+
 function buildFallbackResponse(
   query: string,
   results: Array<{ title: string; content: string }>
@@ -379,10 +528,10 @@ function buildFallbackResponse(
   if (results.length === 0) return `No results found for "${query}".`;
 
   const top = results[0];
-  const clean = cleanContent(top.content);
+  const formatted = toSlackMrkdwn(prepareForFallback(top.content));
 
   // Get all meaningful paragraphs
-  const paragraphs = clean.split(/\n{2,}/).filter(p => p.trim().length > 15);
+  const paragraphs = formatted.split(/\n{2,}/).filter(p => p.trim().length > 15);
 
   // Build a rich response — up to 5000 chars (will be split into Slack blocks)
   let response = `*${top.title}*\n\n`;
@@ -397,7 +546,7 @@ function buildFallbackResponse(
   if (results.length > 1) {
     response += '_See also:_\n';
     results.slice(1, 3).forEach(r => {
-      const firstLine = cleanContent(r.content).split('\n').find(l => l.trim().length > 20) || '';
+      const firstLine = toSlackMrkdwn(prepareForFallback(r.content)).split('\n').find(l => l.trim().length > 20) || '';
       response += `• *${r.title}* — ${firstLine.slice(0, 120)}\n`;
     });
   }
@@ -417,6 +566,11 @@ async function sendSlackResponse(
     sources: Array<{ title: string; content?: string }>;
   }
 ) {
+  if (!isSlackResponseUrl(responseUrl)) {
+    console.error(`[Slack] Refusing to POST to non-Slack response_url: ${responseUrl.slice(0, 60)}`);
+    return;
+  }
+
   const blocks: SlackBlock[] = [];
   const orgName = env.ORGANIZATION_NAME || 'Documentation';
 
@@ -447,9 +601,9 @@ async function sendSlackResponse(
     for (const entry of payload.sources) {
       if (entry.title && !seen.has(entry.title)) {
         seen.add(entry.title);
-        const figmaMatch = entry.content?.match(/https:\/\/www\.figma\.com\/[^\s)]+/);
-        if (figmaMatch) {
-          sourcesText += `• <${figmaMatch[0]}|${entry.title}>\n`;
+        const urlMatch = entry.content?.match(/https?:\/\/[^\s)>"]+/);
+        if (urlMatch) {
+          sourcesText += `• <${urlMatch[0]}|${entry.title}>\n`;
         } else {
           sourcesText += `• ${entry.title}\n`;
         }
@@ -462,11 +616,28 @@ async function sendSlackResponse(
     });
   }
 
-  await fetch(responseUrl, {
+  // Include text fallback alongside blocks (Slack best practice)
+  const textFallback = payload.text.slice(0, 3000);
+  const body = JSON.stringify({
+    response_type: 'in_channel',
+    replace_original: true,
+    text: textFallback,
+    blocks,
+  });
+  console.log(`[Slack] Posting to response_url: ${responseUrl.slice(0, 60)}... body=${body.length} bytes, blocks=${blocks.length}`);
+
+  const slackRes = await fetch(responseUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ response_type: 'in_channel', blocks })
+    body,
   });
+
+  const resBody = await slackRes.text().catch(() => '');
+  if (!slackRes.ok) {
+    console.error(`[Slack] response_url failed: HTTP ${slackRes.status} — ${resBody.slice(0, 500)}`);
+  } else {
+    console.log(`[Slack] response_url success: HTTP ${slackRes.status} body="${resBody.slice(0, 200)}"`);
+  }
 }
 
 // ---------------------------------------------------------------------------

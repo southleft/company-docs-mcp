@@ -14,7 +14,10 @@ import {
 const DEFAULT_SIMILARITY_THRESHOLD = 0.15;
 
 export async function searchWithSupabase(options: SearchOptions = {}, env?: any): Promise<ContentEntry[]> {
-  const { query, category, tags: filterTags, confidence, limit = 50 } = options;
+  const { query, category, tags: filterTags, confidence } = options;
+  // Clamp server-side regardless of caller schema — tool-layer validation
+  // can be bypassed, and match_count flows straight into the DB query.
+  const limit = Math.min(Math.max(1, options.limit ?? 50), 50);
 
   const vectorEnabled = env?.VECTOR_SEARCH_ENABLED;
   const vectorSearchMode = env?.VECTOR_SEARCH_MODE || 'text';

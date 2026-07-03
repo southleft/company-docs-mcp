@@ -99,12 +99,17 @@ export function getChatHtml(env: Env): string {
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
-    <!-- Babel Standalone for JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Babel Standalone for JSX (pinned major: unpinned "latest" has shipped
+         breaking output changes before) -->
+    <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 
     <!-- Marked for markdown parsing - preload for better performance -->
-    <link rel="preload" href="https://cdn.jsdelivr.net/npm/marked/marked.min.js" as="script">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/marked@14/marked.min.js" as="script">
+    <script src="https://cdn.jsdelivr.net/npm/marked@14/marked.min.js"></script>
+    <!-- DOMPurify sanitizes rendered markdown before it is injected into the DOM.
+         Ingested docs (crawled sites, PDFs, markdown) can contain raw HTML that
+         the assistant echoes, so it must never reach dangerouslySetInnerHTML raw. -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 
     <script type="text/babel">
         // Configure marked for better rendering
@@ -554,7 +559,8 @@ export function getChatHtml(env: Env): string {
 
                 const renderContent = (content, type) => {
                     if (type === 'assistant') {
-                        return { __html: marked.parse(content) };
+                        // Sanitize: ingested third-party content can carry raw HTML
+                        return { __html: DOMPurify.sanitize(marked.parse(content), { ADD_ATTR: ['target'] }) };
                     }
                     if (type === 'thinking') {
                         return (
