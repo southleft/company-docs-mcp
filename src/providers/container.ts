@@ -55,7 +55,10 @@ export function resolveContainer(
 		config.EMBEDDING_PROVIDER ??
 		(config.OPENAI_API_KEY ? "openai" : "workers-ai");
 	const vectorStoreId = selection.vectorStore ?? config.VECTOR_STORE ?? "supabase";
-	const chatId = selection.chat ?? config.CHAT_PROVIDER ?? "openai";
+	const chatId =
+		selection.chat ??
+		config.CHAT_PROVIDER ??
+		(config.OPENAI_API_KEY ? "openai" : config.ANTHROPIC_API_KEY ? "anthropic" : "openai");
 	const cacheId =
 		selection.cache ?? config.CACHE ?? (config.CONTENT_CACHE ? "kv" : "memory");
 

@@ -23,6 +23,12 @@ VECTOR_SEARCH_MODE = "vector"
 # the standard stack; set these only when running a custom backend.
 # VECTOR_STORE = "supabase"
 # CHAT_PROVIDER = "openai"
+# The chat provider only affects the optional web chat demo (/ai-chat) and
+# Slack — MCP clients bring their own LLM. Set "anthropic" + ANTHROPIC_API_KEY
+# to run the demo on Claude instead of OpenAI.
+# CHAT_PROVIDER = "anthropic"
+# ANTHROPIC_API_KEY = "sk-ant-..."
+# ANTHROPIC_MODEL = "claude-opus-4-8"
 # CACHE = "kv"
 
 [[kv_namespaces]]

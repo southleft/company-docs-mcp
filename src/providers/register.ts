@@ -16,6 +16,7 @@ import {
 import { createOpenAIEmbedding, createWorkersAIEmbedding } from "./impl/embeddings";
 import { createSupabaseVectorStore } from "./impl/supabase-vector-store";
 import { createOpenAIChat } from "./impl/openai-chat";
+import { createAnthropicChat } from "./impl/anthropic-chat";
 import { createKvCache, createMemoryCache, createNoopCache } from "./impl/caches";
 
 let registered = false;
@@ -30,6 +31,7 @@ export function registerDefaultProviders(): void {
 	vectorStoreRegistry.register("supabase", createSupabaseVectorStore);
 
 	chatRegistry.register("openai", createOpenAIChat);
+	chatRegistry.register("anthropic", createAnthropicChat);
 
 	cacheRegistry.register("kv", createKvCache);
 	cacheRegistry.register("memory", createMemoryCache);

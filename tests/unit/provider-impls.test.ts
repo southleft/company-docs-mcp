@@ -111,3 +111,72 @@ describe("toOpenAIMessage", () => {
 		});
 	});
 });
+
+describe("anthropic chat translation", async () => {
+	const { toAnthropicMessages, toAnthropicToolChoice } = await import(
+		"../../src/providers/impl/anthropic-chat"
+	);
+
+	it("lifts system messages into the top-level system param", () => {
+		const { system, messages } = toAnthropicMessages([
+			{ role: "system", content: "You are a docs assistant." },
+			{ role: "user", content: "hi" },
+		]);
+		expect(system).toBe("You are a docs assistant.");
+		expect(messages).toEqual([{ role: "user", content: "hi" }]);
+	});
+
+	it("maps assistant tool calls to tool_use blocks with parsed input", () => {
+		const { messages } = toAnthropicMessages([
+			{
+				role: "assistant",
+				content: null,
+				toolCalls: [{ id: "toolu_1", name: "search", arguments: '{"q":"x"}' }],
+			},
+		]);
+		expect(messages).toEqual([
+			{
+				role: "assistant",
+				content: [{ type: "tool_use", id: "toolu_1", name: "search", input: { q: "x" } }],
+			},
+		]);
+	});
+
+	it("merges consecutive tool results into one user message", () => {
+		const { messages } = toAnthropicMessages([
+			{ role: "tool", content: "r1", toolCallId: "toolu_1" },
+			{ role: "tool", content: "r2", toolCallId: "toolu_2" },
+		]);
+		expect(messages).toHaveLength(1);
+		expect(messages[0].role).toBe("user");
+		expect(messages[0].content).toEqual([
+			{ type: "tool_result", tool_use_id: "toolu_1", content: "r1" },
+			{ type: "tool_result", tool_use_id: "toolu_2", content: "r2" },
+		]);
+	});
+
+	it("maps neutral toolChoice to Anthropic's union", () => {
+		expect(toAnthropicToolChoice("required")).toEqual({
+			type: "any",
+			disable_parallel_tool_use: true,
+		});
+		expect(toAnthropicToolChoice("none")).toEqual({ type: "none" });
+		expect(toAnthropicToolChoice(undefined)).toBeUndefined();
+	});
+});
+
+describe("anthropic chat registration", () => {
+	it("resolves via CHAT_PROVIDER=anthropic", () => {
+		const container = resolveContainer({
+			CHAT_PROVIDER: "anthropic",
+			ANTHROPIC_API_KEY: "sk-ant-test",
+		});
+		expect(container.chat.id).toBe("anthropic");
+		expect(container.chat.model).toBe("claude-opus-4-8");
+	});
+
+	it("auto-selects anthropic when only ANTHROPIC_API_KEY is set", () => {
+		const container = resolveContainer({ ANTHROPIC_API_KEY: "sk-ant-test" });
+		expect(container.chat.id).toBe("anthropic");
+	});
+});
