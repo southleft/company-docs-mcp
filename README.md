@@ -321,6 +321,31 @@ Since Cloudflare appears in several steps, here's a plain-language summary of wh
 
 **Is Cloudflare optional?** No — it's required for both publishing and hosting. However, the free tier is more than sufficient and no separate AI subscription is needed. The only setup required is creating an account and running `npx wrangler login`.
 
+## Advanced: Pluggable Backends
+
+The default stack above (Cloudflare Workers + Workers AI + Supabase) is the
+recommended path and works out of the box. For organizations with existing
+infrastructure preferences, the backends are pluggable — each one resolves
+through a provider registry selected by environment variable:
+
+| Seam | Env var | Ships with |
+|---|---|---|
+| Embeddings | `EMBEDDING_PROVIDER` | `workers-ai` (default), `openai` |
+| Vector store | `VECTOR_STORE` | `supabase` (default) |
+| Chat (optional demo/Slack only) | `CHAT_PROVIDER` | `openai` (default), `anthropic` |
+| Cache | `CACHE` | `kv` (default with a KV binding), `memory`, `none` |
+
+Adding a backend (e.g. a different vector database) means implementing one
+interface and registering it under an id — no core code changes. See
+[src/providers/README.md](src/providers/README.md) for the contracts and
+[docs/EMBEDDING_MIGRATION.md](docs/EMBEDDING_MIGRATION.md) before switching
+embedding providers (that one requires re-embedding your content).
+
+Note for MCP-first deployments: the chat provider only affects the optional
+web chat demo and Slack integration. MCP clients bring their own language
+model, so search quality depends only on the embedding provider and vector
+store.
+
 ## CLI Reference
 
 ### npm Package Commands
