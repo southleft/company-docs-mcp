@@ -45,7 +45,7 @@ export async function ingestContent(
     case 'pdf':
       const { parsePDF } = await import("./pdf-parser");
       const pdfBuffer = await fs.readFile(source);
-      entry = await parsePDF(pdfBuffer.buffer.slice(0), source, {
+      entry = await parsePDF(pdfBuffer.buffer.slice(0) as ArrayBuffer, source, {
         metadata,
         chunkSize,
         overlapSize,

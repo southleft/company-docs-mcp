@@ -12,7 +12,8 @@
 		"database/schema.sql",
 		"database/migrate-to-workers-ai.sql",
 		"README.md",
-		"LICENSE"
+		"LICENSE",
+		"database/migrations/"
 	],
 	"scripts": {
 		"deploy": "wrangler deploy",
@@ -24,7 +25,7 @@
 		"start": "wrangler dev",
 		"start:local": "wrangler dev -c wrangler.toml.local --env-file .env.local",
 		"cf-typegen": "wrangler types",
-		"type-check": "tsc --noEmit",
+		"type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
 		"ingest": "tsx scripts/ingest/ingest.ts",
 		"ingest:csv": "tsx scripts/ingest/ingest-csv.ts --",
 		"ingest:pdf": "tsx scripts/ingest/ingest.ts pdf",
@@ -48,30 +49,25 @@
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.22.0",
-		"@slack/bolt": "^4.4.0",
 		"@supabase/supabase-js": "^2.82.0",
-		"abort-controller": "^3.0.0",
-		"agents": "^0.0.95",
-		"cheerio": "^1.1.0",
 		"dotenv": "^17.2.1",
 		"openai": "^4.67.3",
-		"pdf-parse": "^1.1.1",
-		"uuid": "^11.1.0",
-		"zod": "^3.23.8"
+		"zod": "^3.23.8",
+		"zod-to-json-schema": "^3.24.1"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.0.4",
 		"@cloudflare/vitest-pool-workers": "^0.12.16",
+		"@slack/bolt": "^4.4.0",
 		"@types/cheerio": "^0.22.35",
 		"@types/node": "^22.10.2",
-		"@typescript-eslint/eslint-plugin": "^8.18.2",
-		"@typescript-eslint/parser": "^8.18.2",
-		"eslint": "^9.18.0",
-		"node-fetch": "^2.7.0",
+		"@types/pdf-parse": "^1.1.5",
+		"cheerio": "^1.1.0",
 		"esbuild": "^0.24.0",
+		"pdf-parse": "^1.1.1",
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.2",
-		"vitest": "^4.0.18",
+		"vitest": "^3.2.4",
 		"wrangler": "^4.20.5"
 	}
 }

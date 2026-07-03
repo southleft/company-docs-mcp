@@ -13,7 +13,10 @@ export async function loadAllContentEntries(): Promise<ContentEntry[]> {
 	const entries: ContentEntry[] = [];
 
 	try {
-		// Try to load the manifest file (generated during build)
+		// Try to load the manifest file (generated during build).
+		// The manifest is user-generated content and gitignored, so it may not
+		// exist at type-check time — the catch below handles its absence.
+		// @ts-ignore -- module resolution is optional by design
 		const manifestModule = await import('../../content/manifest.json');
 		const manifest = manifestModule.default as { files: string[], total_files: number };
 

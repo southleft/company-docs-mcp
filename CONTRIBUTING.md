@@ -32,6 +32,9 @@ npm install
 # Create .env from example
 cp .env.example .env
 
+# Create wrangler.toml from example (gitignored; needed by npm run dev)
+cp wrangler.toml.example wrangler.toml
+
 # Run tests
 npm test
 

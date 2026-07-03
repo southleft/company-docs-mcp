@@ -7,9 +7,8 @@
 wrangler.toml.local
 *.local
 
-# Dependencies
+# Dependencies (package-lock.json IS committed for reproducible installs)
 node_modules/
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
@@ -19,16 +18,19 @@ build/
 .tmp-build/
 .wrangler/
 .mf/
+worker-configuration.d.ts
 
 # Supabase CLI (project-specific migration history)
 supabase/
 
-# IDE
+# IDE / assistants
 .vscode/
 .idea/
 *.swp
 *.swo
 .DS_Store
+.serena/
+.claude/
 
 # Logs
 logs/
@@ -47,13 +49,6 @@ coverage/
 # Content (organization-specific)
 content/**/*
 !content/.gitkeep
-!examples/
-
-# Organization-specific documentation
-docs/*canvas*
-docs/*workday*
-*CanvasKit*
-*canvas-kit*
 
 # Database
 *.db
@@ -76,13 +71,6 @@ wrangler.toml
 
 # Keep example only
 !wrangler.toml.example
-
-# Serena AI assistant (local development only)
-.serena/
-
-# Debug and test files
-debug-frontend.html
-test-slack-response.js
 
 # Playwright/browser automation artifacts
 .playwright-mcp/

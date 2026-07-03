@@ -1,7 +1,7 @@
 import pkg from '@slack/bolt';
 const { App } = pkg as any;
 import { config } from 'dotenv';
-import fetch from 'node-fetch';
+
 import OpenAI from 'openai';
 
 config();
@@ -51,7 +51,7 @@ class DocumentationBot {
 
   private setupEventHandlers() {
     // Handle slash command
-    this.app.command(process.env.SLACK_SLASH_COMMAND || '/docs', async ({ command, ack, respond }) => {
+    this.app.command(process.env.SLACK_SLASH_COMMAND || '/docs', async ({ command, ack, respond }: any) => {
       await ack();
       
       if (!command.text) {
@@ -87,7 +87,7 @@ class DocumentationBot {
     });
 
     // Handle app mentions
-    this.app.event('app_mention', async ({ event, say }) => {
+    this.app.event('app_mention', async ({ event, say }: any) => {
       // Extract the query by removing the bot mention
       const query = event.text.replace(/<@[A-Z0-9]+>/g, '').trim();
       
@@ -114,7 +114,7 @@ class DocumentationBot {
     });
 
     // Handle direct messages
-    this.app.message(async ({ message, say }) => {
+    this.app.message(async ({ message, say }: any) => {
       // Only respond to DMs (not in channels)
       if (message.channel_type === 'im' && message.text) {
         try {
