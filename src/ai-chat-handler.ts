@@ -6,9 +6,16 @@
  * AI-synthesized response.
  */
 
-import { OpenAI } from "openai";
 import { withTimeout, isResourceLimitError, createResourceLimitErrorMessage } from "./lib/utils";
 import { OPENAI_TOOLS, executeTool, ensureContentLoaded, type Env } from "./tools";
+import { resolveContainer, type ChatMessage, type ChatToolDef } from "./providers";
+
+// Neutral tool definitions for the chat provider, derived from the OpenAI-shaped list
+const CHAT_TOOLS: ChatToolDef[] = (OPENAI_TOOLS as any[]).map((tool) => ({
+  name: tool.function.name,
+  description: tool.function.description,
+  parameters: tool.function.parameters,
+}));
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -65,106 +72,87 @@ async function handleAiChatInternal(request: Request, env: Env): Promise<Respons
     }
 
     const { message } = (await request.json()) as { message: string };
-    const apiKey = env.OPENAI_API_KEY;
     const model = env.OPENAI_MODEL || "gpt-4o";
     const orgName = env.ORGANIZATION_NAME || "Documentation";
 
-    if (!apiKey) {
+    // Resolve the configured chat provider (CHAT_PROVIDER env var; openai default)
+    let chat;
+    try {
+      chat = resolveContainer(env as any).chat;
+    } catch {
       return new Response(
-        JSON.stringify({ error: "OpenAI API key not configured." }),
+        JSON.stringify({ error: "Chat provider not configured (set OPENAI_API_KEY or CHAT_PROVIDER)." }),
         { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }
 
-    const openai = new OpenAI({ apiKey, timeout: 45000, maxRetries: 1 });
+    const maxTokens = model.includes("gpt-5") ? 4000 : 8000;
 
     // Initial completion — force tool usage
-    const completionParams: any = {
-      model,
-      messages: [
-        { role: "system", content: getSystemPrompt(orgName) },
-        { role: "user", content: message },
-      ],
-      tools: OPENAI_TOOLS,
-      tool_choice: "required",
-      parallel_tool_calls: false,
-      stream: false,
-    };
-
-    if (model.includes("gpt-5")) {
-      completionParams.max_completion_tokens = 4000;
-    } else {
-      completionParams.max_tokens = 8000;
-    }
-
-    let completion;
+    let result;
     try {
-      completion = await withTimeout(
-        openai.chat.completions.create(completionParams),
+      result = await withTimeout(
+        chat.chat({
+          messages: [
+            { role: "system", content: getSystemPrompt(orgName) },
+            { role: "user", content: message },
+          ],
+          tools: CHAT_TOOLS,
+          toolChoice: "required",
+          maxTokens,
+        }),
         35000,
-        "OpenAI initial completion"
+        "Chat initial completion"
       );
-    } catch (openaiError: any) {
-      throw new Error(`OpenAI API failed: ${openaiError.message || "Unknown error"}`);
+    } catch (chatError: any) {
+      throw new Error(`Chat provider failed: ${chatError.message || "Unknown error"}`);
     }
-
-    let response = completion.choices[0].message;
 
     // If no tool calls and no content, force a search
-    if (!response.tool_calls?.length && !response.content) {
-      throw new Error("OpenAI returned an empty response. Please try rephrasing your question.");
+    if (!result.toolCalls?.length && !result.content) {
+      throw new Error("The model returned an empty response. Please try rephrasing your question.");
     }
 
     // Handle tool calls
-    if (response.tool_calls && response.tool_calls.length > 0) {
+    if (result.toolCalls && result.toolCalls.length > 0) {
       // Strip any intermediate "thinking" content — only the final response matters
-      const assistantMsg = { ...response, content: null } as any;
-      const messages: any[] = [
+      const messages: ChatMessage[] = [
         { role: "system", content: getSystemPrompt(orgName) },
         { role: "user", content: message },
-        assistantMsg,
+        { role: "assistant", content: null, toolCalls: result.toolCalls },
       ];
 
       // Execute each tool call
-      for (const toolCall of response.tool_calls) {
+      for (const toolCall of result.toolCalls) {
         try {
           const toolResult = await withTimeout(
-            executeTool(toolCall.function.name, JSON.parse(toolCall.function.arguments), env),
+            executeTool(toolCall.name, JSON.parse(toolCall.arguments), env),
             10000,
-            `Tool call: ${toolCall.function.name}`
+            `Tool call: ${toolCall.name}`
           );
-          messages.push({ role: "tool", tool_call_id: toolCall.id, content: toolResult });
+          messages.push({ role: "tool", toolCallId: toolCall.id, content: toolResult });
         } catch (error: any) {
           messages.push({
             role: "tool",
-            tool_call_id: toolCall.id,
+            toolCallId: toolCall.id,
             content: `Error: ${error.message}`,
           });
         }
       }
 
       // Get final response with tool results
-      const finalParams: any = { model, messages, stream: false };
-      if (model.includes("gpt-5")) {
-        finalParams.max_completion_tokens = 4000;
-      } else {
-        finalParams.max_tokens = 8000;
-      }
-
-      const finalCompletion = await withTimeout(
-        openai.chat.completions.create(finalParams),
+      result = await withTimeout(
+        chat.chat({ messages, maxTokens }),
         45000,
-        "OpenAI final completion"
+        "Chat final completion"
       );
 
-      response = finalCompletion.choices[0].message;
-
-      if (!response?.content) {
-        throw new Error("OpenAI returned an empty response after tool execution.");
+      if (!result?.content) {
+        throw new Error("The model returned an empty response after tool execution.");
       }
     }
 
-    return new Response(JSON.stringify({ response: response.content }), {
+    return new Response(JSON.stringify({ response: result.content }), {
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });
   } catch (error: any) {

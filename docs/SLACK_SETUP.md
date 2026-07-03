@@ -227,6 +227,23 @@ Edit `src/slack-webhook.ts` to adjust:
 - Error messages and help text
 - The organization name displayed in the header (set `ORGANIZATION_NAME` in your Worker vars)
 
+## Alternative: local Socket Mode bot
+
+The deployed Worker webhook above is the recommended integration. For local
+development — or environments where Slack can't reach a public URL — the repo
+also ships a standalone [Socket Mode](https://api.slack.com/apis/connections/socket-mode)
+bot at `src/slack-bot/`:
+
+```bash
+# Requires SLACK_BOT_TOKEN, SLACK_APP_TOKEN, and SLACK_SIGNING_SECRET in .env
+npm run slack:start
+```
+
+It runs as a local Node process (not part of the Worker deploy), supports the
+same slash command plus app mentions and DMs, and needs Socket Mode enabled in
+your Slack app settings. Note it duplicates the webhook's formatting logic, so
+prefer the webhook unless you specifically need Socket Mode.
+
 ## Support
 
 If you encounter issues:

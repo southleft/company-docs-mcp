@@ -56,6 +56,7 @@
 		"zod-to-json-schema": "^3.24.1"
 	},
 	"devDependencies": {
+		"@anthropic-ai/sdk": "^0.110.0",
 		"@biomejs/biome": "^2.0.4",
 		"@cloudflare/vitest-pool-workers": "^0.12.16",
 		"@slack/bolt": "^4.4.0",
