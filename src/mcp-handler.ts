@@ -46,14 +46,22 @@ async function processMessage(server: McpServer, message: any, env: Env, request
 
   // Initialize — must return server capabilities
   if (method === "initialize") {
-    const origin = new URL(requestUrl).origin;
     const orgName = env.ORGANIZATION_NAME || "Company";
+
+    // Echo the client's requested protocol version when we support it, else
+    // fall back. Strict clients (e.g. Codex) may reject a response that
+    // advertises a version they didn't ask for.
+    const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"];
+    const requestedVersion = message.params?.protocolVersion;
+    const negotiatedVersion = SUPPORTED_PROTOCOL_VERSIONS.includes(requestedVersion)
+      ? requestedVersion
+      : "2025-03-26";
 
     return {
       jsonrpc: "2.0",
       id: message.id,
       result: {
-        protocolVersion: "2025-03-26",
+        protocolVersion: negotiatedVersion,
         serverInfo: {
           name: `${orgName} Documentation Assistant`,
           version: "2.0.0",
@@ -230,13 +238,26 @@ export async function handleMcp(
         headers["Mcp-Session-Id"] = crypto.randomUUID();
       }
 
+      // Notification-only posts produce no results; per spec return 202 Accepted
+      // (a 200 with an empty/`undefined` body is ambiguous to strict clients).
+      if (results.length === 0) {
+        return new Response(null, { status: 202, headers });
+      }
+
       const responseData = messages.length === 1 ? results[0] : results;
       return new Response(JSON.stringify(responseData), { status: 200, headers });
     }
 
-    // GET — server-initiated streams (not implemented)
+    // GET — optional server-initiated SSE stream. This server is stateless and
+    // doesn't push server-initiated messages, so per the MCP spec we signal
+    // that the optional stream isn't offered with 405 Method Not Allowed.
+    // Returning 501 makes strict clients (e.g. Codex) treat the connection as
+    // broken and never call tools/list.
     if (request.method === "GET") {
-      return new Response("SSE endpoint not implemented", { status: 501, headers: CORS_HEADERS });
+      return new Response("Method Not Allowed: this server does not offer a server-initiated stream", {
+        status: 405,
+        headers: { ...CORS_HEADERS, Allow: "POST, DELETE, OPTIONS" },
+      });
     }
 
     // DELETE — session cleanup (stateless)
