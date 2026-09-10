@@ -68,7 +68,7 @@
 		"pdf-parse": "^1.1.1",
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.2",
-		"vitest": "^3.2.4",
+		"vitest": "^5.0.0",
 		"wrangler": "^4.20.5"
 	}
 }
